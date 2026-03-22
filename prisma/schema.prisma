@@ -1,0 +1,265 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  CUSTOMER
+  DISTRIBUTOR
+  ADMIN
+}
+
+enum OrderStatus {
+  PAYMENT_PENDING
+  ORDERED
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+enum OrderPaymentType {
+  PREPAID
+  COD
+  UPI
+  BANK_TRANSFER
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED
+}
+
+enum EnquiryStatus {
+  PENDING
+  CONTACTED
+  CONVERTED
+  REJECTED
+}
+
+model User {
+  id          String    @id @default(uuid())
+  phone       String    @unique
+  name        String
+  email       String
+  role        UserRole  @default(CUSTOMER)
+  companyName String?
+  gstNumber   String?
+  createdAt   DateTime  @default(now())
+  deletedAt   DateTime?
+
+  addresses     Address[]
+  reviews       Review[]
+  orders        Order[]
+  wishlistItems WishlistItem[]
+}
+
+model otp_sessions {
+  id        String   @id @default(uuid())
+  phone     String
+  sessionId String
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  used      Boolean  @default(false)
+
+  @@index([phone])
+  @@index([sessionId])
+}
+
+model Address {
+  id        String  @id @default(uuid())
+  address1  String
+  address2  String?
+  city      String
+  pincode   String?
+  landmark  String?
+  state     String
+  country   String
+  isDefault Boolean @default(false)
+  userId    String
+
+  user   User    @relation(fields: [userId], references: [id])
+  orders Order[]
+
+  @@index([userId])
+}
+
+model Product {
+  id             String   @id @default(uuid())
+  categoryId     String
+  name           String
+  description    String?
+  features       String[]
+  benefits       String[]
+  usage          String[]
+  idealFor       String[]
+  reasonsToBuy   String[]
+  greenDiscounts String[]
+  sustainable    String[]
+  faq            Json     @default("[]")
+  certifications String[]
+  price          Decimal
+  b2bPrice       Decimal?
+  moq            Int      @default(1)
+  originalPrice  Decimal  @default(0)
+  deliveryPrice  Decimal  @default(0)
+  isFeatured     Boolean  @default(false)
+  isArchived     Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  length         Int      @default(0)
+  breadth        Int      @default(0)
+  height         Int      @default(0)
+  weight         Int      @default(0)
+
+  category      Category       @relation(fields: [categoryId], references: [id])
+  images        Image[]
+  reviews       Review[]
+  orderItems    OrderItem[]
+  wishlistItems WishlistItem[]
+
+  @@index([categoryId])
+}
+
+model Image {
+  id        String   @id @default(uuid())
+  productId String
+  url       String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+}
+
+model Review {
+  id           String   @id @default(uuid())
+  productId    String
+  userId       String?
+  customerName String?
+  rating       Int
+  comment      String?
+  createdAt    DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id])
+  user    User?   @relation(fields: [userId], references: [id])
+
+  @@unique([userId, productId])
+  @@index([productId])
+  @@index([userId])
+}
+
+model Category {
+  id          String   @id @default(uuid())
+  name        String
+  billboardId String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  billboard Billboard @relation(fields: [billboardId], references: [id])
+  products  Product[]
+
+  @@index([billboardId])
+}
+
+model Billboard {
+  id        String   @id @default(uuid())
+  label     String
+  imageUrl  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  categories Category[]
+}
+
+model OrderItem {
+  id              String  @id @default(uuid())
+  orderId         String
+  productId       String
+  quantity        Int
+  priceAtPurchase Decimal
+
+  order   Order   @relation(fields: [orderId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model Order {
+  id             String           @id @default(uuid())
+  orderId        String           @unique
+  isPaid         Boolean          @default(false)
+  paymentType    OrderPaymentType @default(PREPAID)
+  status         OrderStatus      @default(ORDERED)
+  shipRocket     Json?
+  couponId       String?
+  discountAmount Decimal          @default(0)
+  invoiceUrl     String?
+  addressId      String
+  userId         String
+  amount         Decimal          @default(0)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  deletedAt      DateTime?
+
+  address    Address     @relation(fields: [addressId], references: [id])
+  user       User        @relation(fields: [userId], references: [id])
+  coupon     Coupon?     @relation(fields: [couponId], references: [id])
+  orderItems OrderItem[]
+
+  @@index([addressId])
+  @@index([userId])
+  @@index([couponId])
+  @@index([addressId, userId, orderId])
+}
+
+model WishlistItem {
+  id        String   @id @default(uuid())
+  userId    String
+  productId String
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@unique([userId, productId])
+  @@index([userId])
+  @@index([productId])
+}
+
+model Coupon {
+  id             String       @id @default(uuid())
+  code           String       @unique
+  discountType   DiscountType
+  discountValue  Int
+  minOrderAmount Int?
+  maxDiscount    Int?
+  validFrom      DateTime?
+  validUntil     DateTime?
+  isActive       Boolean      @default(true)
+  usageLimit     Int?
+  usedCount      Int          @default(0)
+  createdAt      DateTime     @default(now())
+
+  orders Order[]
+
+  @@index([code])
+}
+
+model DistributorEnquiry {
+  id          String        @id @default(uuid())
+  name        String
+  email       String
+  phone       String
+  companyName String?
+  message     String
+  status      EnquiryStatus @default(PENDING)
+  createdAt   DateTime      @default(now())
+
+  @@index([status])
+}

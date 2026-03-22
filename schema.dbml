@@ -1,0 +1,286 @@
+//// ------------------------------------------------------
+//// DBML — Generated from fixed schema.prisma
+//// Paste this at https://dbdiagram.io for the visual ERD
+//// ------------------------------------------------------
+
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
+Enum UserRole {
+  CUSTOMER
+  DISTRIBUTOR
+  ADMIN
+}
+
+Enum OrderStatus {
+  PAYMENT_PENDING
+  ORDERED
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+Enum OrderPaymentType {
+  PREPAID
+  COD
+  UPI
+  BANK_TRANSFER
+}
+
+Enum DiscountType {
+  PERCENTAGE
+  FIXED
+}
+
+Enum EnquiryStatus {
+  PENDING
+  CONTACTED
+  CONVERTED
+  REJECTED
+}
+
+// ─────────────────────────────────────────────
+// TABLES
+// ─────────────────────────────────────────────
+
+Table User {
+  id          String    [pk, note: 'UUID primary key']
+  phone       String    [unique, not null]
+  name        String    [not null]
+  email       String    [not null]
+  role        UserRole  [not null, default: 'CUSTOMER']
+  companyName String
+  gstNumber   String
+  createdAt   DateTime  [default: `now()`, not null]
+  deletedAt   DateTime  [note: 'Soft delete — null means active']
+
+  note: 'Phone is unique but NOT the PK to avoid cascading updates on phone change'
+}
+
+Table otp_sessions {
+  id        String   [pk]
+  phone     String   [not null]
+  sessionId String   [not null]
+  createdAt DateTime [default: `now()`, not null]
+  expiresAt DateTime [not null]
+  used      Boolean  [not null, default: false]
+
+  indexes {
+    phone
+    sessionId
+  }
+}
+
+Table Address {
+  id        String  [pk]
+  address1  String  [not null]
+  address2  String
+  city      String  [not null, note: 'Required by ShipRocket and courier APIs']
+  pincode   String
+  landmark  String
+  state     String  [not null]
+  country   String  [not null]
+  isDefault Boolean [not null, default: false]
+  userId    String  [not null]
+
+  indexes {
+    userId
+  }
+}
+
+Table Product {
+  id             String   [pk]
+  categoryId     String   [not null]
+  name           String   [not null]
+  description    String
+  features       String[] [not null]
+  benefits       String[] [not null]
+  usage          String[] [not null]
+  idealFor       String[] [not null]
+  reasonsToBuy   String[] [not null]
+  greenDiscounts String[] [not null]
+  sustainable    String[] [not null]
+  faq            Json     [not null, default: '[]', note: 'Shape: [{q: string, a: string}]']
+  certifications String[] [not null]
+  price          Decimal  [not null]
+  b2bPrice       Decimal  [note: 'Distributor bulk price']
+  moq            Int      [not null, default: 1, note: 'Minimum order quantity for B2B']
+  originalPrice  Decimal  [not null, default: 0]
+  deliveryPrice  Decimal  [not null, default: 0]
+  isFeatured     Boolean  [not null, default: false]
+  isArchived     Boolean  [not null, default: false]
+  createdAt      DateTime [default: `now()`, not null]
+  updatedAt      DateTime [not null]
+  length         Int      [not null, default: 0]
+  breadth        Int      [not null, default: 0]
+  height         Int      [not null, default: 0]
+  weight         Int      [not null, default: 0]
+
+  indexes {
+    categoryId
+  }
+}
+
+Table Image {
+  id        String   [pk]
+  productId String   [not null]
+  url       String   [not null]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+
+  indexes {
+    productId
+  }
+
+  note: 'Cascade deletes when parent Product is deleted'
+}
+
+Table Review {
+  id           String   [pk]
+  productId    String   [not null]
+  userId       String   [note: 'Null = guest review']
+  customerName String   [note: 'Display name for guest reviews']
+  rating       Int      [not null, note: '1–5 star rating']
+  comment      String
+  createdAt    DateTime [default: `now()`, not null]
+
+  indexes {
+    productId
+    userId
+    (userId, productId) [unique, note: 'One review per user per product']
+  }
+}
+
+Table Category {
+  id          String   [pk]
+  name        String   [not null]
+  billboardId String   [not null]
+  createdAt   DateTime [default: `now()`, not null]
+  updatedAt   DateTime [not null]
+
+  indexes {
+    billboardId
+  }
+}
+
+Table Billboard {
+  id        String   [pk]
+  label     String   [not null]
+  imageUrl  String   [not null]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+}
+
+Table OrderItem {
+  id              String  [pk]
+  orderId         String  [not null]
+  productId       String  [not null]
+  quantity        Int     [not null]
+  priceAtPurchase Decimal [not null, note: 'Price snapshot at time of purchase']
+
+  indexes {
+    orderId
+    productId
+  }
+}
+
+Table Order {
+  id             String           [pk]
+  orderId        String           [unique, not null]
+  isPaid         Boolean          [not null, default: false]
+  paymentType    OrderPaymentType [not null, default: 'PREPAID']
+  status         OrderStatus      [not null, default: 'ORDERED']
+  shipRocket     Json
+  couponId       String           [note: 'FK to Coupon — replaces raw couponCode string']
+  discountAmount Decimal          [not null, default: 0]
+  invoiceUrl     String
+  addressId      String           [not null]
+  userId         String           [not null]
+  amount         Decimal          [not null, default: 0]
+  createdAt      DateTime         [default: `now()`, not null]
+  updatedAt      DateTime         [not null]
+  deletedAt      DateTime         [note: 'Soft delete — null means active']
+
+  indexes {
+    addressId
+    userId
+    couponId
+    (addressId, userId, orderId)
+  }
+}
+
+Table WishlistItem {
+  id        String   [pk]
+  userId    String   [not null]
+  productId String   [not null]
+  createdAt DateTime [default: `now()`, not null]
+
+  indexes {
+    userId
+    productId
+    (userId, productId) [unique]
+  }
+}
+
+Table Coupon {
+  id             String       [pk]
+  code           String       [unique, not null]
+  discountType   DiscountType [not null]
+  discountValue  Int          [not null]
+  minOrderAmount Int
+  maxDiscount    Int
+  validFrom      DateTime
+  validUntil     DateTime
+  isActive       Boolean      [not null, default: true]
+  usageLimit     Int
+  usedCount      Int          [not null, default: 0]
+  createdAt      DateTime     [default: `now()`, not null]
+
+  indexes {
+    code
+  }
+}
+
+Table DistributorEnquiry {
+  id          String        [pk]
+  name        String        [not null]
+  email       String        [not null]
+  phone       String        [not null]
+  companyName String
+  message     String        [not null]
+  status      EnquiryStatus [not null, default: 'PENDING']
+  createdAt   DateTime      [default: `now()`, not null]
+
+  indexes {
+    status
+  }
+}
+
+// ─────────────────────────────────────────────
+// RELATIONSHIPS
+// Defined here only — no inline refs in columns
+// above to avoid duplicate definition errors
+// ─────────────────────────────────────────────
+
+// User → children
+Ref: Address.userId > User.id
+Ref: Review.userId > User.id
+Ref: Order.userId > User.id
+Ref: WishlistItem.userId > User.id
+
+// Product → children
+Ref: Product.categoryId > Category.id
+Ref: Image.productId > Product.id [delete: Cascade]
+Ref: Review.productId > Product.id
+Ref: OrderItem.productId > Product.id
+Ref: WishlistItem.productId > Product.id
+
+// Category / Billboard
+Ref: Category.billboardId > Billboard.id
+
+// Order → children and lookups
+Ref: OrderItem.orderId > Order.id
+Ref: Order.addressId > Address.id
+Ref: Order.couponId > Coupon.id
