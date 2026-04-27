@@ -49,6 +49,9 @@ model User {
   role        UserRole  @default(CUSTOMER)
   companyName String?
   gstNumber   String?
+  isApproved  Boolean   @default(true)
+  creditLimit Decimal?
+  creditUsed  Decimal   @default(0)
   createdAt   DateTime  @default(now())
   deletedAt   DateTime?
 
@@ -60,13 +63,12 @@ model User {
 
 model otp_sessions {
   id        String   @id @default(uuid())
-  phone     String
+  phone     String   @unique
   sessionId String
   createdAt DateTime @default(now())
   expiresAt DateTime
   used      Boolean  @default(false)
 
-  @@index([phone])
   @@index([sessionId])
 }
 
@@ -107,8 +109,11 @@ model Product {
   moq            Int      @default(1)
   originalPrice  Decimal  @default(0)
   deliveryPrice  Decimal  @default(0)
+  gstRate        Decimal  @default(18)
+  hsnCode        String?
   isFeatured     Boolean  @default(false)
   isArchived     Boolean  @default(false)
+  stock          Int      @default(0)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   length         Int      @default(0)
@@ -192,21 +197,35 @@ model OrderItem {
 }
 
 model Order {
-  id             String           @id @default(uuid())
-  orderId        String           @unique
-  isPaid         Boolean          @default(false)
-  paymentType    OrderPaymentType @default(PREPAID)
-  status         OrderStatus      @default(ORDERED)
-  shipRocket     Json?
-  couponId       String?
-  discountAmount Decimal          @default(0)
-  invoiceUrl     String?
-  addressId      String
-  userId         String
-  amount         Decimal          @default(0)
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
-  deletedAt      DateTime?
+  id                  String           @id @default(uuid())
+  orderId             String           @unique
+  idempotencyKey      String?          @unique
+  shiprocketOrderId   String?          @unique
+  invoiceNumber       String?          @unique
+  isPaid              Boolean          @default(false)
+  paymentType         OrderPaymentType @default(PREPAID)
+  status              OrderStatus      @default(PAYMENT_PENDING)
+  shipRocket          Json?
+  couponId            String?
+  subtotalAmount      Decimal          @default(0)
+  discountAmount      Decimal          @default(0)
+  taxAmount           Decimal          @default(0)
+  deliveryAmount      Decimal          @default(0)
+  taxBreakup          Json?
+  invoiceUrl          String?
+  razorpayOrderId     String?
+  razorpayPaymentId   String?
+  addressId           String
+  userId              String
+  amount              Decimal          @default(0)
+  paymentExpiresAt    DateTime?
+  paidAt              DateTime?
+  refundedAt          DateTime?
+  refundAmount        Decimal?
+  refundId            String?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  deletedAt           DateTime?
 
   address    Address     @relation(fields: [addressId], references: [id])
   user       User        @relation(fields: [userId], references: [id])
@@ -217,6 +236,8 @@ model Order {
   @@index([userId])
   @@index([couponId])
   @@index([addressId, userId, orderId])
+  @@index([status, paymentExpiresAt])
+  @@index([razorpayPaymentId])
 }
 
 model WishlistItem {
@@ -250,6 +271,35 @@ model Coupon {
   orders Order[]
 
   @@index([code])
+}
+
+model WebhookEvent {
+  id        String   @id
+  source    String
+  createdAt DateTime @default(now())
+
+  @@index([source])
+}
+
+model NotificationLog {
+  id        String   @id @default(uuid())
+  channel   String
+  recipient String
+  template  String
+  refType   String
+  refId     String
+  status    String
+  error     String?
+  createdAt DateTime @default(now())
+
+  @@index([refType, refId])
+  @@index([createdAt])
+  @@unique([channel, template, refType, refId])
+}
+
+model InvoiceCounter {
+  bucket String @id
+  next   Int    @default(1)
 }
 
 model DistributorEnquiry {

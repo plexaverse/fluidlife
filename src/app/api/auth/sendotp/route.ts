@@ -1,72 +1,74 @@
-import { NextResponse } from 'next/server';
-import prismadb from '@/lib/prismadb';
+import { NextResponse } from "next/server";
+import prismadb from "@/lib/prismadb";
+import { env } from "@/lib/env";
+import { apiError } from "@/lib/api-error";
+import { logger } from "@/lib/logger";
+import { corsHeaders } from "@/lib/cors";
+import { safeJson } from "@/lib/safe-json";
+import { enforceRateLimit, rateLimits } from "@/lib/ratelimit";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-};
+const PHONE_REGEX = /^[1-9]\d{9,14}$/;
+const OTP_TTL_MS = 60 * 1000;
 
-export async function OPTIONS() {
-  return NextResponse.json({}, { headers: corsHeaders });
+export async function OPTIONS(req: Request) {
+  return new NextResponse(null, { status: 204, headers: corsHeaders(req) });
 }
 
 export async function POST(req: Request) {
+  const headers = corsHeaders(req);
   try {
-    const { phone } = await req.json();
-
-    const baseUrl = process.env.TWO_FACTOR_BASE_URL;
-    const authKey = process.env.TWO_FACTOR_AUTH_KEY;
-
-    if (!authKey || !baseUrl) {
-      throw new Error('Authentication key or Base URL is missing');
+    const r = await safeJson(req, { headers, maxBytes: 1024 });
+    if (!r.ok) return r.response;
+    const body = r.data as any;
+    const phone = typeof body?.phone === "string" ? body.phone.trim() : "";
+    if (!PHONE_REGEX.test(phone)) {
+      return apiError("BAD_REQUEST", "Valid phone number required (10-15 digits)", headers);
     }
 
-    const templateName = 'OTP1';
-    const apiUrl = `${baseUrl}${authKey}/SMS/${phone}/AUTOGEN/${templateName}`;
-    
-    const response = await fetch(apiUrl, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json'
+    const limited = await enforceRateLimit(req, rateLimits.sendOtp(), phone, headers);
+    if (limited) return limited;
+
+    const apiUrl = `${env.TWO_FACTOR_BASE_URL}${env.TWO_FACTOR_AUTH_KEY}/SMS/${encodeURIComponent(phone)}/AUTOGEN/OTP1`;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    let data: { Status?: string; Details?: string };
+    try {
+      const response = await fetch(apiUrl, {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        return apiError("INTERNAL", "OTP provider error", headers);
       }
-    });
-
-    if (!response.ok) {
-      throw new Error(`2Factor.in API error: ${response.status}`);
+      data = await response.json();
+    } finally {
+      clearTimeout(timeout);
     }
 
-    const data = await response.json();
-
-    const existingSession = await prismadb.otp_sessions.findFirst({
-      where: { phone }
-    });
-
-    if (existingSession) {
-      await prismadb.otp_sessions.update({
-        where: { id: existingSession.id },
-        data: {
-          sessionId: data.Details,
-          expiresAt: new Date(Date.now() + 1 * 60 * 1000), // 1 min expiry
-          used: false,
-        }
-      });
-    } else {
-      await prismadb.otp_sessions.create({
-        data: {
-          phone,
-          sessionId: data.Details,
-          expiresAt: new Date(Date.now() + 1 * 60 * 1000),
-          used: false
-        }
-      });
+    if (data.Status !== "Success" || !data.Details) {
+      return apiError("INTERNAL", "Failed to send OTP", headers);
     }
 
-    return NextResponse.json({
-      status: data.Status === "Success" ? "pending" : "failed"
-    }, { headers: corsHeaders });
+    await prismadb.otp_sessions.upsert({
+      where: { phone },
+      create: {
+        phone,
+        sessionId: data.Details,
+        expiresAt: new Date(Date.now() + OTP_TTL_MS),
+        used: false,
+      },
+      update: {
+        sessionId: data.Details,
+        expiresAt: new Date(Date.now() + OTP_TTL_MS),
+        used: false,
+      },
+    });
+
+    return NextResponse.json({ status: "pending" }, { headers });
   } catch (error) {
-    console.error(error);
-    return NextResponse.json({ error: 'Failed to send verification' }, { status: 500, headers: corsHeaders });
+    logger.error("[SENDOTP]", error);
+    return apiError("INTERNAL", "Failed to send verification", headers);
   }
 }

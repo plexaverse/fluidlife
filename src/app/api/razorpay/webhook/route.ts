@@ -1,46 +1,87 @@
-import prismadb from "@/lib/prismadb";
 import { NextResponse } from "next/server";
 import crypto from "crypto";
-// import { createShiprocketOrderForPrepaid } from "@/lib/createShiprocketOrderForPrepaid";
+import prismadb from "@/lib/prismadb";
+import { env } from "@/lib/env";
+import { logger } from "@/lib/logger";
+import { readBody } from "@/lib/safe-json";
+import { notifyOrderEvent } from "@/lib/notify";
 
-const headers = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-};
-
-export async function OPTIONS() { return NextResponse.json({}, { headers }); }
+function timingSafeEqualHex(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  try {
+    return crypto.timingSafeEqual(Buffer.from(a, "utf8"), Buffer.from(b, "utf8"));
+  } catch {
+    return false;
+  }
+}
 
 export async function POST(req: Request) {
   try {
     const signature = req.headers.get("x-razorpay-signature");
-    const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
+    if (!signature) return NextResponse.json({ error: "Missing signature" }, { status: 401 });
 
-    if (!webhookSecret) return NextResponse.json({ error: "Server error" }, { status: 500, headers });
-
-    const rawBody = await req.text();
-    if (!signature) return NextResponse.json({ error: "Missing signature" }, { status: 401, headers });
-
-    const expectedSignature = crypto.createHmac("sha256", webhookSecret).update(rawBody).digest("hex");
-    if (signature !== expectedSignature) return NextResponse.json({ error: "Invalid signature" }, { status: 401, headers });
-
-    const body = JSON.parse(rawBody);
-
-    if (body.event === "payment.authorized") {
-      const orderId = body.payload.payment.entity.notes.orderId;
-
-      await prismadb.order.update({
-        where: { id: orderId },
-        data: { isPaid: true },
-      });
-
-      // The integration file for Shiprocket should be called here
-      // await createShiprocketOrderForPrepaid({ orderId });
+    const r = await readBody(req, { maxBytes: 100_000 });
+    if (!r.ok) return r.response;
+    const rawBody = r.raw;
+    const expected = crypto.createHmac("sha256", env.RAZORPAY_WEBHOOK_SECRET).update(rawBody).digest("hex");
+    if (!timingSafeEqualHex(signature, expected)) {
+      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }
-    
-    return NextResponse.json({}, { headers });
+
+    let body: any;
+    try {
+      body = JSON.parse(rawBody);
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    }
+    const eventId: string | undefined = body?.id;
+    if (!eventId) return NextResponse.json({ error: "Missing event id" }, { status: 400 });
+
+    try {
+      await prismadb.webhookEvent.create({ data: { id: eventId, source: "razorpay" } });
+    } catch (e: any) {
+      if (e?.code === "P2002") return NextResponse.json({ status: "duplicate" });
+      throw e;
+    }
+
+    const event: string = body.event;
+    const payment = body?.payload?.payment?.entity;
+    const orderRef: string | undefined = payment?.notes?.orderId;
+    const paymentId: string | undefined = payment?.id;
+    const razorpayOrderId: string | undefined = payment?.order_id;
+
+    if (!orderRef) return NextResponse.json({ status: "ignored", reason: "no orderId in notes" });
+
+    if (event === "payment.captured" || event === "payment.authorized") {
+      // Atomically mark paid; only fire side-effects on the first transition.
+      const updated = await prismadb.order.updateMany({
+        where: { orderId: orderRef, isPaid: false },
+        data: {
+          isPaid: true,
+          status: "ORDERED",
+          paidAt: new Date(),
+          razorpayPaymentId: paymentId ?? null,
+          razorpayOrderId: razorpayOrderId ?? null,
+        },
+      });
+      if (updated.count > 0) {
+        // Best-effort, non-blocking notification.
+        notifyOrderEvent(orderRef, "ORDER_CONFIRMED").catch((e) =>
+          logger.error("[notify ORDER_CONFIRMED]", e, { orderRef })
+        );
+      }
+      return NextResponse.json({ status: "ok", updated: updated.count });
+    }
+
+    if (event === "payment.failed") {
+      // Single-attempt failure; user can retry until paymentExpiresAt elapses.
+      // Cleanup is handled by the pg_cron `release_expired_orders` job.
+      return NextResponse.json({ status: "noted" });
+    }
+
+    return NextResponse.json({ status: "ignored", event });
   } catch (error) {
-    console.error("[RAZORPAY_WEBHOOK]", error);
-    return NextResponse.json({ error: "Internal error" }, { status: 500, headers });
+    logger.error("[RAZORPAY_WEBHOOK]", error);
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }

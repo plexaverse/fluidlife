@@ -1,68 +1,60 @@
 import { NextResponse } from "next/server";
 import prismadb from "@/lib/prismadb";
+import { requireAdmin, isResponse } from "@/lib/auth";
+import { apiError } from "@/lib/api-error";
+import { logger } from "@/lib/logger";
+import { corsHeaders } from "@/lib/cors";
+import { safeJson } from "@/lib/safe-json";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-};
-
-export async function OPTIONS() {
-  return NextResponse.json({}, { headers: corsHeaders });
+export async function OPTIONS(req: Request) {
+  return new NextResponse(null, { status: 204, headers: corsHeaders(req) });
 }
 
 export async function POST(req: Request) {
+  const headers = corsHeaders(req);
+  const auth = await requireAdmin();
+  if (isResponse(auth)) return auth;
+
   try {
-    const body = await req.json();
-    const { name, billboardId } = body;
+    const r = await safeJson(req, { headers });
+    if (!r.ok) return r.response;
+    const body = r.data as any;
+    const name = typeof body?.name === "string" ? body.name.trim() : "";
+    const billboardId = typeof body?.billboardId === "string" ? body.billboardId : "";
+    if (!name) return apiError("BAD_REQUEST", "Name is required", headers);
+    if (!billboardId) return apiError("BAD_REQUEST", "Billboard ID is required", headers);
 
-    if (!name) {
-      return new NextResponse("Name is required", { status: 400 });
+    try {
+      const category = await prismadb.category.create({ data: { name, billboardId } });
+      return NextResponse.json(category, { headers });
+    } catch (e: any) {
+      if (e?.code === "P2003") return apiError("BAD_REQUEST", "Billboard does not exist", headers);
+      throw e;
     }
-    if (!billboardId) {
-      return new NextResponse("Billboard ID is required", { status: 400 });
-    }
-
-    const category = await prismadb.category.create({
-      data: {
-        name,
-        billboardId,
-      },
-    });
-
-    return NextResponse.json(category, { headers: corsHeaders });
   } catch (error) {
-    console.error('[CATEGORIES_POST]', error);
-    return new NextResponse("Internal error", { status: 500 });
+    logger.error("[CATEGORIES_POST]", error);
+    return apiError("INTERNAL", "Failed to create category", headers);
   }
 }
 
 export async function GET(req: Request) {
+  const headers = corsHeaders(req);
   try {
     const { searchParams } = new URL(req.url);
-    const take = Math.min(parseInt(searchParams.get('take') || '50'), 100);
-    const skip = parseInt(searchParams.get('skip') || '0');
+    const take = Math.min(Math.max(parseInt(searchParams.get("take") || "50", 10) || 50, 1), 100);
+    const skip = Math.max(parseInt(searchParams.get("skip") || "0", 10) || 0, 0);
 
-    // O(1) SQL Joins instead of JS Map finds
     const categories = await prismadb.category.findMany({
-      include: {
-        billboard: true
-      },
-      orderBy: { createdAt: 'desc' },
+      include: { billboard: true },
+      orderBy: { createdAt: "desc" },
       take,
-      skip
+      skip,
     });
 
-    const list = categories.map((category: any) => {
-      return {
-        ...category,
-        image: category.billboard?.imageUrl || null,
-      };
-    });
-
-    return NextResponse.json(list, { headers: corsHeaders });
+    const list = categories.map((c) => ({ ...c, image: c.billboard?.imageUrl ?? null }));
+    return NextResponse.json(list, { headers });
   } catch (error) {
-    console.error('[CATEGORIES_GET]', error);
-    return new NextResponse("Internal error", { status: 500, headers: corsHeaders });
+    logger.error("[CATEGORIES_GET]", error);
+    return apiError("INTERNAL", "Failed to fetch categories", headers);
   }
 }

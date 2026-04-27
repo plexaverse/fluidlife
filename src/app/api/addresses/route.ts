@@ -1,63 +1,69 @@
 import { NextResponse } from "next/server";
 import prismadb from "@/lib/prismadb";
+import { requireUser, isResponse } from "@/lib/auth";
+import { apiError } from "@/lib/api-error";
+import { logger } from "@/lib/logger";
+import { corsHeaders } from "@/lib/cors";
+import { safeJson } from "@/lib/safe-json";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-};
-
-export async function OPTIONS() {
-  return NextResponse.json({}, { headers: corsHeaders });
+export async function OPTIONS(req: Request) {
+  return new NextResponse(null, { status: 204, headers: corsHeaders(req) });
 }
 
 export async function GET(req: Request) {
+  const headers = corsHeaders(req);
+  const session = await requireUser(req);
+  if (isResponse(session)) return session;
+
   try {
-    const { searchParams } = new URL(req.url);
-    const userId = searchParams.get('userId');
-
-    if (!userId) {
-      return new NextResponse("User ID is required", { status: 400 });
-    }
-
     const addresses = await prismadb.address.findMany({
-      where: { userId }
+      where: { userId: session.userId },
+      orderBy: { isDefault: "desc" },
     });
-
-    return NextResponse.json(addresses, { headers: corsHeaders });
+    return NextResponse.json(addresses, { headers });
   } catch (error) {
-    return new NextResponse("Internal error", { status: 500 });
+    logger.error("[ADDRESSES_GET]", error);
+    return apiError("INTERNAL", "Failed to fetch addresses", headers);
   }
 }
 
 export async function POST(req: Request) {
-  try {
-    const body = await req.json();
-    const { address1, address2, city, pincode, landmark, state, country, isDefault, userId } = body;
+  const headers = corsHeaders(req);
+  const session = await requireUser(req);
+  if (isResponse(session)) return session;
 
-    if (!userId) return new NextResponse("User ID is required", { status: 400, headers: corsHeaders });
-    if (!address1) return new NextResponse("Address line 1 is required", { status: 400, headers: corsHeaders });
-    if (!city) return new NextResponse("City is required for Shiprocket", { status: 400, headers: corsHeaders }); // Fix #9
-    if (!state) return new NextResponse("State is required", { status: 400, headers: corsHeaders });
-    if (!country) return new NextResponse("Country is required", { status: 400, headers: corsHeaders });
+  try {
+    const r = await safeJson(req, { headers });
+    if (!r.ok) return r.response;
+    const body = r.data as any;
+    const address1 = typeof body?.address1 === "string" ? body.address1.trim() : "";
+    const city = typeof body?.city === "string" ? body.city.trim() : "";
+    const state = typeof body?.state === "string" ? body.state.trim() : "";
+    const country = typeof body?.country === "string" ? body.country.trim() : "";
+    const pincode = typeof body?.pincode === "string" ? body.pincode.trim() : "";
+
+    if (!address1) return apiError("BAD_REQUEST", "Address line 1 is required", headers);
+    if (!city) return apiError("BAD_REQUEST", "City is required", headers);
+    if (!state) return apiError("BAD_REQUEST", "State is required", headers);
+    if (!country) return apiError("BAD_REQUEST", "Country is required", headers);
+    if (!pincode) return apiError("BAD_REQUEST", "Pincode is required for shipping", headers);
 
     const address = await prismadb.address.create({
       data: {
         address1,
-        address2,
+        address2: typeof body.address2 === "string" ? body.address2 : null,
         city,
         pincode,
-        landmark,
+        landmark: typeof body.landmark === "string" ? body.landmark : null,
         state,
         country,
-        isDefault: isDefault || false,
-        userId
-      }
+        isDefault: Boolean(body.isDefault),
+        userId: session.userId,
+      },
     });
-
-    return NextResponse.json(address, { headers: corsHeaders });
+    return NextResponse.json(address, { headers });
   } catch (error) {
-    console.error('[ADDRESSES_POST]', error);
-    return new NextResponse("Internal error", { status: 500, headers: corsHeaders });
+    logger.error("[ADDRESSES_POST]", error);
+    return apiError("INTERNAL", "Failed to create address", headers);
   }
 }

@@ -1,46 +1,35 @@
 import { NextResponse } from "next/server";
 import prismadb from "@/lib/prismadb";
+import { requireAdmin, isResponse } from "@/lib/auth";
+import { apiError, apiValidationError } from "@/lib/api-error";
+import { logger } from "@/lib/logger";
+import { corsHeaders } from "@/lib/cors";
+import { safeJson } from "@/lib/safe-json";
+import { productUpdateSchema } from "@/lib/schemas";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-};
-
-export async function OPTIONS() {
-  return NextResponse.json({}, { headers: corsHeaders });
+export async function OPTIONS(req: Request) {
+  return new NextResponse(null, { status: 204, headers: corsHeaders(req) });
 }
 
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ productId: string }> }
 ) {
+  const headers = corsHeaders(req);
   try {
     const { productId } = await params;
+    if (!productId) return apiError("BAD_REQUEST", "Product id is required", headers);
 
-    if (!productId) {
-      return new NextResponse("Product id is required", { status: 400 });
-    }
-
-    const product = await prismadb.product.findUnique({
-      where: {
-        id: productId,
-      },
-      include: {
-        images: true,
-        category: true,
-        reviews: true,
-      },
+    const product = await prismadb.product.findFirst({
+      where: { id: productId, isArchived: false },
+      include: { images: true, category: true, reviews: true },
     });
+    if (!product) return apiError("NOT_FOUND", "Product not found", headers);
 
-    if (!product) {
-      return new NextResponse("Product not found", { status: 404 });
-    }
-
-    return NextResponse.json(product, { headers: corsHeaders });
+    return NextResponse.json(product, { headers });
   } catch (error) {
-    console.error('[PRODUCT_GET]', error);
-    return new NextResponse("Internal error", { status: 500 });
+    logger.error("[PRODUCT_GET]", error);
+    return apiError("INTERNAL", "Failed to fetch product", headers);
   }
 }
 
@@ -48,88 +37,51 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ productId: string }> }
 ) {
+  const headers = corsHeaders(req);
+  const auth = await requireAdmin();
+  if (isResponse(auth)) return auth;
+
   try {
     const { productId } = await params;
-    const body = await req.json();
+    if (!productId) return apiError("BAD_REQUEST", "Product id is required", headers);
 
-    const {
-      name,
-      description,
-      price,
-      originalPrice,
-      categoryId,
-      isFeatured,
-      isArchived,
-      features,
-      reasonsToBuy,
-      idealFor,
-      images,
-    } = body;
+    const r = await safeJson(req, { headers });
+    if (!r.ok) return r.response;
+    const parsed = productUpdateSchema.safeParse(r.data);
+    if (!parsed.success) return apiValidationError(parsed.error, headers);
+    const data = parsed.data;
 
-    if (!productId) {
-      return new NextResponse("Product id is required", { status: 400 });
-    }
-
-    if (!name) {
-      return new NextResponse("Name is required", { status: 400 });
-    }
-
-    if (!images || !images.length) {
-      return new NextResponse("Images are required", { status: 400 });
-    }
-
-    if (!price) {
-      return new NextResponse("Price is required", { status: 400 });
-    }
-
-    if (!categoryId) {
-      return new NextResponse("Category id is required", { status: 400 });
-    }
-
-    await prismadb.product.update({
-      where: {
-        id: productId,
-      },
-      data: {
-        name,
-        description,
-        price,
-        originalPrice,
-        categoryId,
-        isFeatured,
-        isArchived,
-        features,
-        reasonsToBuy,
-        idealFor,
-        images: {
-          deleteMany: {},
+    const product = await prismadb.$transaction(async (tx) => {
+      await tx.product.update({
+        where: { id: productId },
+        data: {
+          name: data.name,
+          description: data.description ?? null,
+          price: data.price,
+          ...(data.originalPrice !== undefined && { originalPrice: data.originalPrice }),
+          categoryId: data.categoryId,
+          ...(data.isFeatured !== undefined && { isFeatured: data.isFeatured }),
+          ...(data.isArchived !== undefined && { isArchived: data.isArchived }),
+          ...(data.stock !== undefined && { stock: data.stock }),
+          ...(data.features !== undefined && { features: data.features }),
+          ...(data.reasonsToBuy !== undefined && { reasonsToBuy: data.reasonsToBuy }),
+          ...(data.idealFor !== undefined && { idealFor: data.idealFor }),
+          images: { deleteMany: {} },
         },
-      },
+      });
+      return tx.product.update({
+        where: { id: productId },
+        data: { images: { createMany: { data: data.images } } },
+        include: { images: true, category: true },
+      });
     });
 
-    const product = await prismadb.product.update({
-      where: {
-        id: productId,
-      },
-      data: {
-        images: {
-          createMany: {
-            data: [
-              ...images.map((image: { url: string }) => image),
-            ],
-          },
-        },
-      },
-      include: {
-        images: true,
-        category: true,
-      }
-    });
-
-    return NextResponse.json(product, { headers: corsHeaders });
-  } catch (error) {
-    console.error('[PRODUCT_PATCH]', error);
-    return new NextResponse("Internal error", { status: 500 });
+    return NextResponse.json(product, { headers });
+  } catch (error: any) {
+    if (error?.code === "P2025") return apiError("NOT_FOUND", "Product not found", headers);
+    if (error?.code === "P2003") return apiError("BAD_REQUEST", "Category does not exist", headers);
+    logger.error("[PRODUCT_PATCH]", error);
+    return apiError("INTERNAL", "Failed to update product", headers);
   }
 }
 
@@ -137,22 +89,22 @@ export async function DELETE(
   req: Request,
   { params }: { params: Promise<{ productId: string }> }
 ) {
+  const headers = corsHeaders(req);
+  const auth = await requireAdmin();
+  if (isResponse(auth)) return auth;
+
   try {
     const { productId } = await params;
+    if (!productId) return apiError("BAD_REQUEST", "Product id is required", headers);
 
-    if (!productId) {
-      return new NextResponse("Product id is required", { status: 400 });
-    }
-
-    const product = await prismadb.product.delete({
-      where: {
-        id: productId,
-      },
+    const product = await prismadb.product.update({
+      where: { id: productId },
+      data: { isArchived: true },
     });
-
-    return NextResponse.json(product, { headers: corsHeaders });
-  } catch (error) {
-    console.error('[PRODUCT_DELETE]', error);
-    return new NextResponse("Internal error", { status: 500 });
+    return NextResponse.json(product, { headers });
+  } catch (error: any) {
+    if (error?.code === "P2025") return apiError("NOT_FOUND", "Product not found", headers);
+    logger.error("[PRODUCT_DELETE]", error);
+    return apiError("INTERNAL", "Failed to delete product", headers);
   }
 }

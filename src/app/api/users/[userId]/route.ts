@@ -1,96 +1,98 @@
-import { NextResponse } from 'next/server';
-import prismadb from '@/lib/prismadb';
+import { NextResponse } from "next/server";
+import prismadb from "@/lib/prismadb";
+import { requireAdminOrSelf, isResponse } from "@/lib/auth";
+import { apiError } from "@/lib/api-error";
+import { logger } from "@/lib/logger";
+import { corsHeaders } from "@/lib/cors";
+import { safeJson } from "@/lib/safe-json";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-};
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export async function OPTIONS() {
-  return NextResponse.json({}, { headers: corsHeaders });
+export async function OPTIONS(req: Request) {
+  return new NextResponse(null, { status: 204, headers: corsHeaders(req) });
 }
 
 export async function GET(req: Request, { params }: { params: Promise<{ userId: string }> }) {
+  const headers = corsHeaders(req);
+  const { userId } = await params;
+  if (!userId) return apiError("BAD_REQUEST", "User ID is required", headers);
+
+  const auth = await requireAdminOrSelf(req, userId);
+  if (isResponse(auth)) return auth;
+
   try {
-    const { userId } = await params;
-    
-    if (!userId) {
-      return NextResponse.json({ error: "User ID is required" }, { status: 400, headers: corsHeaders });
-    }
-
     const user = await prismadb.user.findFirst({
-      where: {
-        id: userId,
-        deletedAt: null // Fix #10: Ignore soft-deleted users
-      },
-      include: {
-        addresses: true
-      }
+      where: { id: userId, deletedAt: null },
+      include: { addresses: true },
     });
-
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404, headers: corsHeaders });
-    }
-
-    return NextResponse.json(user, { headers: corsHeaders });
+    if (!user) return apiError("NOT_FOUND", "User not found", headers);
+    return NextResponse.json(user, { headers });
   } catch (error) {
-    console.error("GET USER ERROR", error);
-    return NextResponse.json({ error: "Internal error" }, { status: 500, headers: corsHeaders });
+    logger.error("[USER_GET]", error);
+    return apiError("INTERNAL", "Failed to fetch user", headers);
   }
 }
 
 export async function PUT(req: Request, { params }: { params: Promise<{ userId: string }> }) {
+  const headers = corsHeaders(req);
+  const { userId } = await params;
+  if (!userId) return apiError("BAD_REQUEST", "User ID is required", headers);
+
+  const auth = await requireAdminOrSelf(req, userId);
+  if (isResponse(auth)) return auth;
+
   try {
-    const { userId } = await params;
-    const body = await req.json();
+    const r = await safeJson(req, { headers });
+    if (!r.ok) return r.response;
+    const body = r.data as any;
 
-    const { name, email, companyName, gstNumber } = body;
+    const data: Record<string, unknown> = {};
+    if (typeof body.name === "string" && body.name.trim()) data.name = body.name.trim();
+    if (typeof body.email === "string") {
+      if (!EMAIL_REGEX.test(body.email.trim())) return apiError("BAD_REQUEST", "Invalid email", headers);
+      data.email = body.email.trim();
+    }
+    if (typeof body.companyName === "string") data.companyName = body.companyName.trim() || null;
+    if (typeof body.gstNumber === "string") data.gstNumber = body.gstNumber.trim() || null;
 
-    if (!userId) {
-      return NextResponse.json({ error: "User ID is required" }, { status: 400, headers: corsHeaders });
+    if (auth.kind === "admin" && typeof body.role === "string" &&
+        ["CUSTOMER", "DISTRIBUTOR", "ADMIN"].includes(body.role)) {
+      data.role = body.role;
     }
 
-    const user = await prismadb.user.update({
-      where: {
-        id: userId,
-      },
-      data: {
-        name,
-        email,
-        companyName,
-        gstNumber
-      }
-    });
+    if (Object.keys(data).length === 0) return apiError("BAD_REQUEST", "No valid fields to update", headers);
 
-    return NextResponse.json(user, { headers: corsHeaders });
-  } catch (error) {
-    console.error("UPDATE USER ERROR", error);
-    return NextResponse.json({ error: "Internal error" }, { status: 500, headers: corsHeaders });
+    const user = await prismadb.user.update({
+      where: { id: userId },
+      data,
+      select: { id: true, phone: true, name: true, email: true, role: true, companyName: true, gstNumber: true },
+    });
+    return NextResponse.json(user, { headers });
+  } catch (error: any) {
+    if (error?.code === "P2025") return apiError("NOT_FOUND", "User not found", headers);
+    logger.error("[USER_PUT]", error);
+    return apiError("INTERNAL", "Failed to update user", headers);
   }
 }
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ userId: string }> }) {
+  const headers = corsHeaders(req);
+  const { userId } = await params;
+  if (!userId) return apiError("BAD_REQUEST", "User ID is required", headers);
+
+  const auth = await requireAdminOrSelf(req, userId);
+  if (isResponse(auth)) return auth;
+
   try {
-    const { userId } = await params;
-
-    if (!userId) {
-      return NextResponse.json({ error: "User ID is required" }, { status: 400, headers: corsHeaders });
-    }
-
-    // Fix #10 - Soft delete instead of hard delete
     const user = await prismadb.user.update({
-      where: {
-        id: userId,
-      },
-      data: {
-        deletedAt: new Date()
-      }
+      where: { id: userId },
+      data: { deletedAt: new Date() },
+      select: { id: true, deletedAt: true },
     });
-
-    return NextResponse.json(user, { headers: corsHeaders });
-  } catch (error) {
-    console.error("DELETE USER ERROR", error);
-    return NextResponse.json({ error: "Internal error" }, { status: 500, headers: corsHeaders });
+    return NextResponse.json(user, { headers });
+  } catch (error: any) {
+    if (error?.code === "P2025") return apiError("NOT_FOUND", "User not found", headers);
+    logger.error("[USER_DELETE]", error);
+    return apiError("INTERNAL", "Failed to delete user", headers);
   }
 }

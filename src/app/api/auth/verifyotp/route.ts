@@ -1,106 +1,107 @@
 import { NextResponse } from "next/server";
-import jwt from "jsonwebtoken";
 import prismadb from "@/lib/prismadb";
+import { env } from "@/lib/env";
+import { userSession, type UserRole } from "@/lib/session";
+import { apiError } from "@/lib/api-error";
+import { logger } from "@/lib/logger";
+import { corsHeaders } from "@/lib/cors";
+import { safeJson } from "@/lib/safe-json";
+import { enforceRateLimit, rateLimits } from "@/lib/ratelimit";
 
-const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET || "default_secret";
-const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET || "default_refresh_secret";
-const ACCESS_TOKEN_EXPIRY = "15m";
-const REFRESH_TOKEN_EXPIRY = "7d";
+const PHONE_REGEX = /^[1-9]\d{9,14}$/;
+const OTP_REGEX = /^\d{4,8}$/;
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-};
-
-export async function OPTIONS() {
-  return NextResponse.json({}, { headers: corsHeaders });
+export async function OPTIONS(req: Request) {
+  return new NextResponse(null, { status: 204, headers: corsHeaders(req) });
 }
 
 export async function POST(req: Request) {
+  const headers = corsHeaders(req);
   try {
-    const { phone, code } = await req.json();
+    const r = await safeJson(req, { headers, maxBytes: 1024 });
+    if (!r.ok) return r.response;
+    const body = r.data as any;
+    const phone = typeof body?.phone === "string" ? body.phone.trim() : "";
+    const code = typeof body?.code === "string" ? body.code.trim() : "";
 
-    const baseUrl = process.env.TWO_FACTOR_BASE_URL;
-    const authKey = process.env.TWO_FACTOR_AUTH_KEY;
-
-    if (!authKey || !baseUrl) {
-      throw new Error('Authentication env vars missing');
+    if (!PHONE_REGEX.test(phone)) {
+      return apiError("BAD_REQUEST", "Invalid phone number", headers);
     }
-    if (!code) {
-      return NextResponse.json({ error: "OTP code is required" }, { status: 400, headers: corsHeaders });
-    }
-
-    const otpSession = await prismadb.otp_sessions.findFirst({
-      where: {
-        phone,
-        expiresAt: { gt: new Date() },
-        used: false
-      },
-      orderBy: { createdAt: 'desc' }
-    });
-
-    if (!otpSession) {
-      return NextResponse.json({ error: "OTP expired or invalid" }, { status: 400, headers: corsHeaders });
+    if (!OTP_REGEX.test(code)) {
+      return apiError("BAD_REQUEST", "Invalid OTP code", headers);
     }
 
-    const verifyUrl = `${baseUrl}${authKey}/SMS/VERIFY/${otpSession.sessionId}/${code}`;
-    const response = await fetch(verifyUrl, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' }
-    });
+    const limited = await enforceRateLimit(req, rateLimits.verifyOtp(), phone, headers);
+    if (limited) return limited;
 
-    if (!response.ok) {
-      return NextResponse.json({ error: "OTP verification failed (API Error)" }, { status: 400, headers: corsHeaders });
+    const otpSession = await prismadb.otp_sessions.findUnique({ where: { phone } });
+    if (!otpSession || otpSession.used || otpSession.expiresAt <= new Date()) {
+      return apiError("BAD_REQUEST", "OTP expired or invalid", headers);
     }
 
-    await prismadb.otp_sessions.update({
-      where: { id: otpSession.id },
-      data: { used: true }
-    });
+    const verifyUrl = `${env.TWO_FACTOR_BASE_URL}${env.TWO_FACTOR_AUTH_KEY}/SMS/VERIFY/${encodeURIComponent(otpSession.sessionId)}/${encodeURIComponent(code)}`;
 
-    const verificationResult = await response.json();
-    if (verificationResult.Status !== "Success" || verificationResult.Details !== "OTP Matched") {
-      return NextResponse.json({ error: "Invalid OTP" }, { status: 400, headers: corsHeaders });
-    }
-
-    let user = await prismadb.user.findUnique({
-      where: { phone },
-    });
-
-    if (!user) {
-      user = await prismadb.user.create({
-        data: {
-          phone,
-          name: "Guest", 
-          email: `${phone}@placeholder.com`, // Email is @not null in DB
-        },
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    let result: { Status?: string; Details?: string };
+    try {
+      const response = await fetch(verifyUrl, {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
       });
+      if (!response.ok) {
+        return apiError("BAD_REQUEST", "OTP verification failed", headers);
+      }
+      result = await response.json();
+    } finally {
+      clearTimeout(timeout);
     }
 
-    // Use UUID primary key in the payload, addressing Fix #1
-    const payload = { userId: user.id, phone: user.phone, role: user.role };
-    const token = jwt.sign(payload, ACCESS_TOKEN_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRY });
-    const refreshToken = jwt.sign(payload, REFRESH_TOKEN_SECRET, { expiresIn: REFRESH_TOKEN_EXPIRY });
-    
-    const expiry = Math.floor(Date.now() / 1000) + 15 * 60;
+    if (result.Status !== "Success" || result.Details !== "OTP Matched") {
+      return apiError("BAD_REQUEST", "Invalid OTP", headers);
+    }
 
-    return NextResponse.json({
+    const consumed = await prismadb.otp_sessions.updateMany({
+      where: { id: otpSession.id, used: false },
+      data: { used: true },
+    });
+    if (consumed.count === 0) {
+      return apiError("BAD_REQUEST", "OTP already used", headers);
+    }
+
+    const user = await prismadb.user.upsert({
+      where: { phone },
+      create: {
+        phone,
+        name: "Guest",
+        email: `${phone}@placeholder.fluidlife.local`,
+      },
+      update: {},
+      select: { id: true, phone: true, name: true, email: true, role: true },
+    });
+
+    const sessionPayload = {
+      userId: user.id,
+      phone: user.phone,
+      role: user.role as UserRole,
+    };
+    const [token, refreshToken] = await Promise.all([
+      userSession.signAccess(sessionPayload),
+      userSession.signRefresh(sessionPayload),
+    ]);
+
+    return NextResponse.json(
+      {
         token,
         refreshToken,
-        expiry,
-        user: {
-          id: user.id, // Return UUID instead of phone
-          phone: user.phone,
-          name: user.name,
-          email: user.email,
-          role: user.role
-        },
+        expiry: Math.floor(Date.now() / 1000) + userSession.accessExpirySeconds,
+        user,
       },
-      { headers: corsHeaders }
+      { headers }
     );
   } catch (error) {
-    console.error("Error verifying OTP", error);
-    return NextResponse.json({ error: "Failed to verify OTP" }, { status: 500, headers: corsHeaders });
+    logger.error("[VERIFYOTP]", error);
+    return apiError("INTERNAL", "Failed to verify OTP", headers);
   }
 }
