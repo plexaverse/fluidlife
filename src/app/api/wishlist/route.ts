@@ -1,73 +1,88 @@
 import { NextResponse } from "next/server";
 import prismadb from "@/lib/prismadb";
+import { requireUser, isResponse } from "@/lib/auth";
+import { apiError } from "@/lib/api-error";
+import { logger } from "@/lib/logger";
+import { corsHeaders } from "@/lib/cors";
+import { safeJson } from "@/lib/safe-json";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-};
-
-export async function OPTIONS() { return NextResponse.json({}, { headers: corsHeaders }); }
+export async function OPTIONS(req: Request) {
+  return new NextResponse(null, { status: 204, headers: corsHeaders(req) });
+}
 
 export async function GET(req: Request) {
+  const headers = corsHeaders(req);
+  const session = await requireUser(req);
+  if (isResponse(session)) return session;
+
   try {
     const { searchParams } = new URL(req.url);
-    const userId = searchParams.get('userId');
-
-    if (!userId) return new NextResponse("User ID is required", { status: 400, headers: corsHeaders });
+    const take = Math.min(Math.max(parseInt(searchParams.get("take") || "50", 10) || 50, 1), 100);
+    const skip = Math.max(parseInt(searchParams.get("skip") || "0", 10) || 0, 0);
 
     const wishlist = await prismadb.wishlistItem.findMany({
-      where: { userId },
-      include: { product: { include: { images: true } } }
+      where: { userId: session.userId },
+      include: { product: { include: { images: { take: 1 } } } },
+      orderBy: { createdAt: "desc" },
+      take,
+      skip,
     });
-
-    return NextResponse.json(wishlist, { headers: corsHeaders });
-  } catch (e) {
-    return new NextResponse("Error", { status: 500, headers: corsHeaders });
+    return NextResponse.json(wishlist, { headers });
+  } catch (error) {
+    logger.error("[WISHLIST_GET]", error);
+    return apiError("INTERNAL", "Failed to fetch wishlist", headers);
   }
 }
 
 export async function POST(req: Request) {
+  const headers = corsHeaders(req);
+  const session = await requireUser(req);
+  if (isResponse(session)) return session;
+
   try {
-    const { userId, productId } = await req.json();
+    const r = await safeJson(req, { headers });
+    if (!r.ok) return r.response;
+    const body = r.data as any;
+    const productId = typeof body?.productId === "string" ? body.productId : "";
+    if (!productId) return apiError("BAD_REQUEST", "productId required", headers);
 
-    if (!userId || !productId) return new NextResponse("userId and productId required", { status: 400, headers: corsHeaders });
-
-    const item = await prismadb.wishlistItem.create({
-      data: {
-        userId,
-        productId
-      }
-    });
-
-    return NextResponse.json(item, { headers: corsHeaders });
-  } catch (error) {
-    if ((error as any).code === 'P2002') {
-      return new NextResponse("Already in wishlist", { status: 400, headers: corsHeaders });
+    try {
+      const item = await prismadb.wishlistItem.create({
+        data: { userId: session.userId, productId },
+      });
+      return NextResponse.json(item, { headers });
+    } catch (e: any) {
+      if (e?.code === "P2002") return apiError("CONFLICT", "Already in wishlist", headers);
+      if (e?.code === "P2003") return apiError("BAD_REQUEST", "Product does not exist", headers);
+      throw e;
     }
-    return new NextResponse("Error", { status: 500, headers: corsHeaders });
+  } catch (error) {
+    logger.error("[WISHLIST_POST]", error);
+    return apiError("INTERNAL", "Failed to add to wishlist", headers);
   }
 }
 
 export async function DELETE(req: Request) {
+  const headers = corsHeaders(req);
+  const session = await requireUser(req);
+  if (isResponse(session)) return session;
+
   try {
     const { searchParams } = new URL(req.url);
-    const userId = searchParams.get('userId');
-    const productId = searchParams.get('productId');
+    const productId = searchParams.get("productId") || "";
+    if (!productId) return apiError("BAD_REQUEST", "productId required", headers);
 
-    if (!userId || !productId) return new NextResponse("userId and productId required", { status: 400, headers: corsHeaders });
-
-    const deleted = await prismadb.wishlistItem.delete({
-      where: {
-        userId_productId: {
-          userId,
-          productId
-        }
-      }
-    });
-
-    return NextResponse.json(deleted, { headers: corsHeaders });
-  } catch(e) {
-    return new NextResponse("Error", { status: 500, headers: corsHeaders });
+    try {
+      const deleted = await prismadb.wishlistItem.delete({
+        where: { userId_productId: { userId: session.userId, productId } },
+      });
+      return NextResponse.json(deleted, { headers });
+    } catch (e: any) {
+      if (e?.code === "P2025") return apiError("NOT_FOUND", "Not in wishlist", headers);
+      throw e;
+    }
+  } catch (error) {
+    logger.error("[WISHLIST_DELETE]", error);
+    return apiError("INTERNAL", "Failed to remove from wishlist", headers);
   }
 }

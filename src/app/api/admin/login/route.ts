@@ -1,44 +1,50 @@
-import { NextResponse } from 'next/server';
-import { SignJWT } from 'jose';
+import { NextResponse } from "next/server";
+import crypto from "crypto";
+import { env } from "@/lib/env";
+import { adminSession } from "@/lib/session";
+import { ADMIN_COOKIE } from "@/lib/auth";
+import { apiError } from "@/lib/api-error";
+import { logger } from "@/lib/logger";
+import { safeJson } from "@/lib/safe-json";
+import { enforceRateLimit, rateLimits } from "@/lib/ratelimit";
 
-const ADMIN_USERNAME = process.env.ADMIN_USERNAME || process.env.ADMIN_EMAIL;
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
-
-if (!process.env.JWT_SECRET) {
-    console.error('CRITICAL: JWT_SECRET environment variable is not set!');
+function safeEqualString(a: string, b: string): boolean {
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  if (ab.length !== bb.length) return false;
+  return crypto.timingSafeEqual(ab, bb);
 }
 
 export async function POST(req: Request) {
-    try {
-        if (!ADMIN_USERNAME || !ADMIN_PASSWORD || !process.env.JWT_SECRET) {
-            return new NextResponse(JSON.stringify({ error: "Server configuration error" }), { status: 500 });
-        }
-
-        const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET);
-        const body = await req.json();
-        const { username, password } = body;
-
-        if (username !== ADMIN_USERNAME || password !== ADMIN_PASSWORD) {
-            return new NextResponse(JSON.stringify({ error: "Invalid credentials" }), { status: 401 });
-        }
-
-        const token = await new SignJWT({ role: 'admin' })
-            .setProtectedHeader({ alg: 'HS256' })
-            .setIssuedAt()
-            .setExpirationTime('4h')
-            .sign(JWT_SECRET);
-
-        const response = NextResponse.json({ success: true });
-        response.cookies.set('admin_token', token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
-            path: '/',
-            maxAge: 60 * 60 * 4,
-        });
-
-        return response;
-    } catch (error) {
-        return new NextResponse(JSON.stringify({ error: "Internal error" }), { status: 500 });
+  try {
+    const r = await safeJson(req, { maxBytes: 4096 });
+    if (!r.ok) return r.response;
+    const body = r.data as any;
+    if (typeof body.username !== "string" || typeof body.password !== "string") {
+      return apiError("BAD_REQUEST", "username and password are required");
     }
+
+    const limited = await enforceRateLimit(req, rateLimits.adminLogin(), body.username);
+    if (limited) return limited;
+
+    const validUser = safeEqualString(body.username, env.ADMIN_USERNAME);
+    const validPass = safeEqualString(body.password, env.ADMIN_PASSWORD);
+    if (!validUser || !validPass) {
+      return apiError("UNAUTHORIZED", "Invalid credentials");
+    }
+
+    const token = await adminSession.sign();
+    const response = NextResponse.json({ success: true });
+    response.cookies.set(ADMIN_COOKIE, token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      path: "/",
+      maxAge: adminSession.expirySeconds,
+    });
+    return response;
+  } catch (error) {
+    logger.error("[ADMIN_LOGIN]", error);
+    return apiError("INTERNAL", "Login failed");
+  }
 }
