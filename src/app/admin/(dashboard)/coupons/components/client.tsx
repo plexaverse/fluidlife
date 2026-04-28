@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import { Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -7,15 +7,22 @@ import { Button } from "@/components/ui/button";
 import { Heading } from "@/components/ui/heading";
 import { Separator } from "@/components/ui/separator";
 import { DataTable } from "@/components/ui/data-table";
+import { Pagination } from "@/components/ui/pagination";
 
 import { CouponColumn, columns } from "./columns";
 
 interface CouponClientProps {
   data: CouponColumn[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
 export const CouponClient: React.FC<CouponClientProps> = ({
-  data
+  data,
+  total,
+  page,
+  pageSize,
 }) => {
   const router = useRouter();
 
@@ -23,7 +30,7 @@ export const CouponClient: React.FC<CouponClientProps> = ({
     <>
       <div className="flex items-center justify-between">
         <Heading
-          title={`Coupons (${data.length})`}
+          title={`Coupons (${total})`}
           description="Manage coupons for your store"
         />
         <Button onClick={() => router.push(`/admin/coupons/new`)}>
@@ -33,6 +40,7 @@ export const CouponClient: React.FC<CouponClientProps> = ({
       </div>
       <Separator />
       <DataTable searchKey="code" columns={columns} data={data} />
+      <Pagination total={total} page={page} pageSize={pageSize} />
     </>
   );
 };

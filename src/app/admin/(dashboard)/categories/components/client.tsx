@@ -8,28 +8,36 @@ import { DataTable } from "@/components/ui/data-table";
 import { Heading } from "@/components/ui/heading";
 import { Separator } from "@/components/ui/separator";
 import { ApiList } from "@/components/ui/api-list";
+import { Pagination } from "@/components/ui/pagination";
 
 import { columns, CategoryColumn } from "./columns";
 
 interface CategoriesClientProps {
   data: CategoryColumn[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
 export const CategoriesClient: React.FC<CategoriesClientProps> = ({
-  data
+  data,
+  total,
+  page,
+  pageSize,
 }) => {
   const router = useRouter();
 
   return (
     <>
       <div className="flex items-center justify-between">
-        <Heading title={`Categories (${data.length})`} description="Manage categories for your store" />
+        <Heading title={`Categories (${total})`} description="Manage categories for your store" />
         <Button onClick={() => router.push(`/admin/categories/new`)}>
           <Plus className="mr-2 h-4 w-4" /> Add New
         </Button>
       </div>
       <Separator />
       <DataTable searchKey="name" columns={columns} data={data} />
+      <Pagination total={total} page={page} pageSize={pageSize} />
       <Heading title="API" description="API Calls for Categories" />
       <Separator />
       <ApiList entityName="categories" entityIdName="categoryId" />
