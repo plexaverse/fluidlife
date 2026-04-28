@@ -4,7 +4,8 @@ import { useState } from "react";
 import axios from "axios";
 import { toast } from "react-hot-toast";
 import { useRouter } from "next/navigation";
-import { FileText, RotateCcw } from "lucide-react";
+import Link from "next/link";
+import { FileText, Printer, RotateCcw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { RefundModal } from "@/components/models/refund-modal";
@@ -74,9 +75,14 @@ export const OrderActions: React.FC<OrderActionsProps> = ({
         orderAmount={totalAmount}
         publicOrderId={publicOrderId}
       />
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button onClick={onInvoice} disabled={!canInvoice || loading} variant="outline">
-          <FileText className="mr-2 h-4 w-4" /> Download invoice
+          <FileText className="mr-2 h-4 w-4" /> Invoice JSON
+        </Button>
+        <Button asChild disabled={!canInvoice} variant="outline">
+          <Link href={canInvoice ? `/admin/orders/${orderDbId}/invoice` : "#"} target="_blank">
+            <Printer className="mr-2 h-4 w-4" /> Print invoice
+          </Link>
         </Button>
         <Button
           onClick={() => setRefundOpen(true)}

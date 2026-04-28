@@ -75,6 +75,12 @@ export async function PATCH(
           ...(data.features !== undefined && { features: data.features }),
           ...(data.reasonsToBuy !== undefined && { reasonsToBuy: data.reasonsToBuy }),
           ...(data.idealFor !== undefined && { idealFor: data.idealFor }),
+          ...(data.benefits !== undefined && { benefits: data.benefits }),
+          ...(data.usage !== undefined && { usage: data.usage }),
+          ...(data.greenDiscounts !== undefined && { greenDiscounts: data.greenDiscounts }),
+          ...(data.sustainable !== undefined && { sustainable: data.sustainable }),
+          ...(data.certifications !== undefined && { certifications: data.certifications }),
+          ...(data.faq !== undefined && { faq: data.faq as any }),
           images: { deleteMany: {} },
         },
       });

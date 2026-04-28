@@ -68,6 +68,12 @@ export const productUpdateSchema = z.object({
   features: stringArray.optional(),
   reasonsToBuy: stringArray.optional(),
   idealFor: stringArray.optional(),
+  benefits: stringArray.optional(),
+  usage: stringArray.optional(),
+  greenDiscounts: stringArray.optional(),
+  sustainable: stringArray.optional(),
+  certifications: stringArray.optional(),
+  faq: z.array(z.object({ q: z.string(), a: z.string() })).optional(),
   images: z.array(z.object({ url: z.url() })).min(1, { error: "At least one image required" }),
 });
 
