@@ -42,6 +42,8 @@ export const productCreateSchema = z.object({
   breadth: nonNegativeInt.default(0),
   height: nonNegativeInt.default(0),
   weight: nonNegativeInt.default(0),
+  gstRate: z.coerce.number().min(0).max(28).default(18),
+  hsnCode: trimmed.optional(),
   images: z.array(z.object({ url: z.url() })).default([]),
 });
 
@@ -54,6 +56,8 @@ export const productUpdateSchema = z.object({
   isFeatured: z.boolean().optional(),
   isArchived: z.boolean().optional(),
   stock: nonNegativeInt.optional(),
+  gstRate: z.coerce.number().min(0).max(28).optional(),
+  hsnCode: trimmed.nullable().optional(),
   features: stringArray.optional(),
   reasonsToBuy: stringArray.optional(),
   idealFor: stringArray.optional(),

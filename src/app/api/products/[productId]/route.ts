@@ -63,6 +63,8 @@ export async function PATCH(
           ...(data.isFeatured !== undefined && { isFeatured: data.isFeatured }),
           ...(data.isArchived !== undefined && { isArchived: data.isArchived }),
           ...(data.stock !== undefined && { stock: data.stock }),
+          ...(data.gstRate !== undefined && { gstRate: data.gstRate }),
+          ...(data.hsnCode !== undefined && { hsnCode: data.hsnCode || null }),
           ...(data.features !== undefined && { features: data.features }),
           ...(data.reasonsToBuy !== undefined && { reasonsToBuy: data.reasonsToBuy }),
           ...(data.idealFor !== undefined && { idealFor: data.idealFor }),

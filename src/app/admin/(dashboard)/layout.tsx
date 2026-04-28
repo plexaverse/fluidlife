@@ -1,13 +1,14 @@
 import Navbar from '@/components/navbar'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import { adminSession, ADMIN_COOKIE } from '@/lib/session'
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  // Await cookies because of Next.js 15+ server components architecture
   const cookieStore = await cookies();
-  const adminToken = cookieStore.get('admin_token')?.value;
+  const token = cookieStore.get(ADMIN_COOKIE)?.value;
+  const session = token ? await adminSession.verify(token) : null;
 
-  if (!adminToken) {
+  if (!session || session.role !== 'admin') {
     redirect('/admin/login');
   }
 
