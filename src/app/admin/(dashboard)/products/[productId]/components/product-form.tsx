@@ -39,6 +39,13 @@ const formSchema = z.object({
   stock: z.coerce.number().int().min(0).default(0),
   gstRate: z.coerce.number().min(0).max(28).default(18),
   hsnCode: z.string().optional(),
+  b2bPrice: z.coerce.number().min(0).optional(),
+  moq: z.coerce.number().int().min(1).default(1),
+  deliveryPrice: z.coerce.number().min(0).default(0),
+  length: z.coerce.number().int().min(0).default(0),
+  breadth: z.coerce.number().int().min(0).default(0),
+  height: z.coerce.number().int().min(0).default(0),
+  weight: z.coerce.number().int().min(0).default(0),
   isFeatured: z.boolean().default(false).optional(),
   isArchived: z.boolean().default(false).optional(),
   features: z.array(z.string()).default([]),
@@ -79,6 +86,13 @@ export const ProductForm: React.FC<ProductFormProps> = ({
     stock: (initialData as any).stock ?? 0,
     gstRate: parseFloat(String((initialData as any).gstRate ?? 18)),
     hsnCode: (initialData as any).hsnCode ?? '',
+    b2bPrice: (initialData as any).b2bPrice ? parseFloat(String((initialData as any).b2bPrice)) : undefined,
+    moq: (initialData as any).moq ?? 1,
+    deliveryPrice: parseFloat(String((initialData as any).deliveryPrice ?? 0)),
+    length: (initialData as any).length ?? 0,
+    breadth: (initialData as any).breadth ?? 0,
+    height: (initialData as any).height ?? 0,
+    weight: (initialData as any).weight ?? 0,
     isFeatured: initialData.isFeatured,
     isArchived: initialData.isArchived,
     features: initialData.features || [],
@@ -94,6 +108,13 @@ export const ProductForm: React.FC<ProductFormProps> = ({
     stock: 0,
     gstRate: 18,
     hsnCode: '',
+    b2bPrice: undefined,
+    moq: 1,
+    deliveryPrice: 0,
+    length: 0,
+    breadth: 0,
+    height: 0,
+    weight: 0,
     isFeatured: false,
     isArchived: false,
     features: [],
@@ -348,6 +369,101 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                     <Input disabled={loading} placeholder="e.g. 3401" {...field} value={field.value || ''} />
                   </FormControl>
                   <FormDescription>Required on GST invoices.</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="b2bPrice"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>B2B Price (₹)</FormLabel>
+                  <FormControl>
+                    <Input type="number" step="0.01" min={0} disabled={loading} placeholder="optional" {...field} value={field.value ?? ''} />
+                  </FormControl>
+                  <FormDescription>Price for approved distributors. Empty = use retail price.</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="moq"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Min order qty (B2B)</FormLabel>
+                  <FormControl>
+                    <Input type="number" min={1} step={1} disabled={loading} placeholder="1" {...field} />
+                  </FormControl>
+                  <FormDescription>Enforced for distributors only.</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="deliveryPrice"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Delivery price (₹)</FormLabel>
+                  <FormControl>
+                    <Input type="number" step="0.01" min={0} disabled={loading} placeholder="0" {...field} />
+                  </FormControl>
+                  <FormDescription>Fallback when storefront doesn't quote a Shiprocket rate.</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="length"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Length (cm)</FormLabel>
+                  <FormControl>
+                    <Input type="number" min={0} step={1} disabled={loading} {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="breadth"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Breadth (cm)</FormLabel>
+                  <FormControl>
+                    <Input type="number" min={0} step={1} disabled={loading} {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="height"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Height (cm)</FormLabel>
+                  <FormControl>
+                    <Input type="number" min={0} step={1} disabled={loading} {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="weight"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Weight (g)</FormLabel>
+                  <FormControl>
+                    <Input type="number" min={0} step={1} disabled={loading} {...field} />
+                  </FormControl>
+                  <FormDescription>Used by Shiprocket for rate calculation.</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

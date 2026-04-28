@@ -55,9 +55,22 @@ export async function PUT(req: Request, { params }: { params: Promise<{ userId: 
     if (typeof body.companyName === "string") data.companyName = body.companyName.trim() || null;
     if (typeof body.gstNumber === "string") data.gstNumber = body.gstNumber.trim() || null;
 
-    if (auth.kind === "admin" && typeof body.role === "string" &&
-        ["CUSTOMER", "DISTRIBUTOR", "ADMIN"].includes(body.role)) {
-      data.role = body.role;
+    if (auth.kind === "admin") {
+      if (typeof body.role === "string" && ["CUSTOMER", "DISTRIBUTOR", "ADMIN"].includes(body.role)) {
+        data.role = body.role;
+      }
+      if (typeof body.isApproved === "boolean") {
+        data.isApproved = body.isApproved;
+      }
+      if (body.creditLimit === null) {
+        data.creditLimit = null;
+      } else if (body.creditLimit !== undefined) {
+        const n = Number(body.creditLimit);
+        if (!Number.isFinite(n) || n < 0) {
+          return apiError("BAD_REQUEST", "creditLimit must be >= 0 or null", headers);
+        }
+        data.creditLimit = n;
+      }
     }
 
     if (Object.keys(data).length === 0) return apiError("BAD_REQUEST", "No valid fields to update", headers);
@@ -65,7 +78,18 @@ export async function PUT(req: Request, { params }: { params: Promise<{ userId: 
     const user = await prismadb.user.update({
       where: { id: userId },
       data,
-      select: { id: true, phone: true, name: true, email: true, role: true, companyName: true, gstNumber: true },
+      select: {
+        id: true,
+        phone: true,
+        name: true,
+        email: true,
+        role: true,
+        companyName: true,
+        gstNumber: true,
+        isApproved: true,
+        creditLimit: true,
+        creditUsed: true,
+      },
     });
     return NextResponse.json(user, { headers });
   } catch (error: any) {
