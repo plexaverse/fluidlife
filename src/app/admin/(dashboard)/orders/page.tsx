@@ -10,18 +10,43 @@ export const dynamic = "force-dynamic";
 
 const PAGE_SIZE = 50;
 
+const STATUS_VALUES = new Set([
+  "PAYMENT_PENDING",
+  "ORDERED",
+  "SHIPPED",
+  "DELIVERED",
+  "CANCELLED",
+  "REFUNDED",
+]);
+const PAYMENT_VALUES = new Set(["PREPAID", "COD", "UPI", "BANK_TRANSFER"]);
+
 interface PageProps {
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{
+    page?: string;
+    status?: string;
+    paymentType?: string;
+    from?: string; // YYYY-MM-DD
+    to?: string;
+  }>;
 }
 
 const OrdersPage = async ({ searchParams }: PageProps) => {
-  const { page: pageParam } = await searchParams;
-  const page = Math.max(1, parseInt(pageParam || "1", 10) || 1);
+  const sp = await searchParams;
+  const page = Math.max(1, parseInt(sp.page || "1", 10) || 1);
   const skip = (page - 1) * PAGE_SIZE;
+
+  const where: any = { deletedAt: null };
+  if (sp.status && STATUS_VALUES.has(sp.status)) where.status = sp.status;
+  if (sp.paymentType && PAYMENT_VALUES.has(sp.paymentType)) where.paymentType = sp.paymentType;
+  if (sp.from || sp.to) {
+    where.createdAt = {};
+    if (sp.from) where.createdAt.gte = new Date(`${sp.from}T00:00:00`);
+    if (sp.to) where.createdAt.lte = new Date(`${sp.to}T23:59:59`);
+  }
 
   const [orders, total] = await Promise.all([
     prismadb.order.findMany({
-      where: { deletedAt: null },
+      where,
       include: {
         orderItems: { include: { product: true } },
         address: true,
@@ -31,7 +56,7 @@ const OrdersPage = async ({ searchParams }: PageProps) => {
       take: PAGE_SIZE,
       skip,
     }),
-    prismadb.order.count({ where: { deletedAt: null } }),
+    prismadb.order.count({ where }),
   ]);
 
   const formattedOrders: OrderColumn[] = orders.map((item) => ({
@@ -56,7 +81,13 @@ const OrdersPage = async ({ searchParams }: PageProps) => {
   return (
     <div className="flex-col">
       <div className="flex-1 space-y-4 p-8 pt-6">
-        <OrderClient data={formattedOrders} total={total} page={page} pageSize={PAGE_SIZE} />
+        <OrderClient
+          data={formattedOrders}
+          total={total}
+          page={page}
+          pageSize={PAGE_SIZE}
+          filters={{ status: sp.status, paymentType: sp.paymentType, from: sp.from, to: sp.to }}
+        />
       </div>
     </div>
   );

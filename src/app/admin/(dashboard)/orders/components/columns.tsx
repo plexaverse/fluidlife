@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { ColumnDef } from "@tanstack/react-table";
 
 import { CellAction } from "./cell-action";
@@ -20,7 +21,15 @@ export type OrderColumn = {
 };
 
 export const columns: ColumnDef<OrderColumn>[] = [
-  { accessorKey: "publicOrderId", header: "Order #" },
+  {
+    accessorKey: "publicOrderId",
+    header: "Order #",
+    cell: ({ row }) => (
+      <Link href={`/admin/orders/${row.original.id}`} className="font-medium hover:underline">
+        {row.original.publicOrderId}
+      </Link>
+    ),
+  },
   { accessorKey: "itemAndQuantity", header: "Products & Quantity" },
   { accessorKey: "phone", header: "Phone" },
   { accessorKey: "address", header: "Address" },
