@@ -4,6 +4,7 @@ import { useState } from "react";
 import axios from "axios";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
+import { apiErrorMessage } from "@/lib/utils";
 
 export default function AdminLogin() {
   const router = useRouter();
@@ -17,8 +18,8 @@ export default function AdminLogin() {
       toast.success("Logged in successfully");
       router.push('/admin');
       router.refresh();
-    } catch {
-      toast.error("Invalid credentials or server error");
+    } catch (error) {
+      toast.error(apiErrorMessage(error, "Invalid credentials or server error"));
     }
   }
 

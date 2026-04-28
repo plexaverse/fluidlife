@@ -6,6 +6,7 @@ import { useState } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { toast } from "react-hot-toast"
+import { apiErrorMessage } from "@/lib/utils";
 import { Trash } from "lucide-react"
 import { Billboard } from "@prisma/client"
 import { useRouter } from "next/navigation"
@@ -69,7 +70,7 @@ export const BillboardForm: React.FC<BillboardFormProps> = ({
       router.push(`/admin/billboards`);
       toast.success(toastMessage);
     } catch (error: any) {
-      toast.error('Something went wrong.');
+      toast.error(apiErrorMessage(error, 'Something went wrong.'));
     } finally {
       setLoading(false);
     }
@@ -83,7 +84,7 @@ export const BillboardForm: React.FC<BillboardFormProps> = ({
       router.push(`/admin/billboards`);
       toast.success('Billboard deleted.');
     } catch (error: any) {
-      toast.error('Make sure you removed all categories using this billboard first.');
+      toast.error(apiErrorMessage(error, 'Make sure you removed all categories using this billboard first.'));
     } finally {
       setLoading(false);
       setOpen(false);

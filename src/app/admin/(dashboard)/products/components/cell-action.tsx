@@ -4,6 +4,7 @@ import axios from "axios";
 import { useState } from "react";
 import { Copy, Edit, MoreHorizontal, Trash } from "lucide-react";
 import { toast } from "react-hot-toast";
+import { apiErrorMessage } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
@@ -36,7 +37,7 @@ export const CellAction: React.FC<CellActionProps> = ({
       toast.success('Product deleted.');
       router.refresh();
     } catch (error) {
-      toast.error('Something went wrong.');
+      toast.error(apiErrorMessage(error, 'Something went wrong.'));
     } finally {
       setOpen(false);
       setLoading(false);

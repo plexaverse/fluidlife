@@ -44,6 +44,8 @@ export async function POST(req: Request) {
           originalPrice: data.originalPrice,
           deliveryPrice: data.deliveryPrice,
           stock: data.stock,
+          gstRate: data.gstRate,
+          ...(data.hsnCode && { hsnCode: data.hsnCode }),
           isFeatured: data.isFeatured,
           isArchived: data.isArchived,
           length: data.length,

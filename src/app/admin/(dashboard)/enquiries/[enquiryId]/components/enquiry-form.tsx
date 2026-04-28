@@ -6,6 +6,7 @@ import { useState } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { toast } from "react-hot-toast"
+import { apiErrorMessage } from "@/lib/utils";
 import { Trash } from "lucide-react"
 import { DistributorEnquiry } from "@prisma/client"
 import { useRouter } from "next/navigation"
@@ -71,7 +72,7 @@ export const EnquiryForm: React.FC<EnquiryFormProps> = ({
       router.push(`/admin/enquiries`);
       toast.success(toastMessage);
     } catch (error: any) {
-      toast.error('Something went wrong.');
+      toast.error(apiErrorMessage(error, 'Something went wrong.'));
     } finally {
       setLoading(false);
     }
@@ -85,7 +86,7 @@ export const EnquiryForm: React.FC<EnquiryFormProps> = ({
       router.push(`/admin/enquiries`);
       toast.success('Enquiry deleted.');
     } catch (error: any) {
-      toast.error('Something went wrong.');
+      toast.error(apiErrorMessage(error, 'Something went wrong.'));
     } finally {
       setLoading(false);
       setOpen(false);

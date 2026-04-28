@@ -6,6 +6,7 @@ import { useState } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { toast } from "react-hot-toast"
+import { apiErrorMessage } from "@/lib/utils";
 import { Trash } from "lucide-react"
 import { Category, Image, Product } from "@prisma/client"
 import { useRouter } from "next/navigation"
@@ -35,6 +36,9 @@ const formSchema = z.object({
   price: z.coerce.number().min(1),
   originalPrice: z.coerce.number().min(1),
   categoryId: z.string().min(1),
+  stock: z.coerce.number().int().min(0).default(0),
+  gstRate: z.coerce.number().min(0).max(28).default(18),
+  hsnCode: z.string().optional(),
   isFeatured: z.boolean().default(false).optional(),
   isArchived: z.boolean().default(false).optional(),
   features: z.array(z.string()).default([]),
@@ -72,6 +76,9 @@ export const ProductForm: React.FC<ProductFormProps> = ({
     price: parseFloat(String(initialData.price)),
     originalPrice: parseFloat(String(initialData.originalPrice)),
     categoryId: initialData.categoryId,
+    stock: (initialData as any).stock ?? 0,
+    gstRate: parseFloat(String((initialData as any).gstRate ?? 18)),
+    hsnCode: (initialData as any).hsnCode ?? '',
     isFeatured: initialData.isFeatured,
     isArchived: initialData.isArchived,
     features: initialData.features || [],
@@ -84,6 +91,9 @@ export const ProductForm: React.FC<ProductFormProps> = ({
     price: 0,
     originalPrice: 0,
     categoryId: '',
+    stock: 0,
+    gstRate: 18,
+    hsnCode: '',
     isFeatured: false,
     isArchived: false,
     features: [],
@@ -108,7 +118,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
       router.push(`/admin/products`);
       toast.success(toastMessage);
     } catch (error: any) {
-      toast.error('Something went wrong.');
+      toast.error(apiErrorMessage(error, 'Something went wrong.'));
     } finally {
       setLoading(false);
     }
@@ -122,7 +132,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
       router.push(`/admin/products`);
       toast.success('Product deleted.');
     } catch (error: any) {
-      toast.error('Something went wrong.');
+      toast.error(apiErrorMessage(error, 'Something went wrong.'));
     } finally {
       setLoading(false);
       setOpen(false);
@@ -296,6 +306,48 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                       ))}
                     </SelectContent>
                   </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="stock"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Stock</FormLabel>
+                  <FormControl>
+                    <Input type="number" min={0} step={1} disabled={loading} placeholder="0" {...field} />
+                  </FormControl>
+                  <FormDescription>Units available for sale. Decremented atomically at checkout.</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="gstRate"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>GST Rate (%)</FormLabel>
+                  <FormControl>
+                    <Input type="number" min={0} max={28} step={0.01} disabled={loading} placeholder="18" {...field} />
+                  </FormControl>
+                  <FormDescription>Listed price is GST-inclusive at this rate.</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="hsnCode"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>HSN Code</FormLabel>
+                  <FormControl>
+                    <Input disabled={loading} placeholder="e.g. 3401" {...field} value={field.value || ''} />
+                  </FormControl>
+                  <FormDescription>Required on GST invoices.</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
