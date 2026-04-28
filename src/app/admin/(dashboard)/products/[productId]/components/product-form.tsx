@@ -51,6 +51,12 @@ const formSchema = z.object({
   features: z.array(z.string()).default([]),
   reasonsToBuy: z.array(z.string()).default([]),
   idealFor: z.array(z.string()).default([]),
+  benefits: z.array(z.string()).default([]),
+  usage: z.array(z.string()).default([]),
+  greenDiscounts: z.array(z.string()).default([]),
+  sustainable: z.array(z.string()).default([]),
+  certifications: z.array(z.string()).default([]),
+  faq: z.array(z.object({ q: z.string(), a: z.string() })).default([]),
 });
 
 type ProductFormValues = z.infer<typeof formSchema>
@@ -98,6 +104,12 @@ export const ProductForm: React.FC<ProductFormProps> = ({
     features: initialData.features || [],
     reasonsToBuy: initialData.reasonsToBuy || [],
     idealFor: initialData.idealFor || [],
+    benefits: (initialData as any).benefits || [],
+    usage: (initialData as any).usage || [],
+    greenDiscounts: (initialData as any).greenDiscounts || [],
+    sustainable: (initialData as any).sustainable || [],
+    certifications: (initialData as any).certifications || [],
+    faq: Array.isArray((initialData as any).faq) ? (initialData as any).faq : [],
   } : {
     name: '',
     description: '',
@@ -120,6 +132,12 @@ export const ProductForm: React.FC<ProductFormProps> = ({
     features: [],
     reasonsToBuy: [],
     idealFor: [],
+    benefits: [],
+    usage: [],
+    greenDiscounts: [],
+    sustainable: [],
+    certifications: [],
+    faq: [],
   }
 
   const form = useForm<ProductFormValues>({
@@ -160,7 +178,18 @@ export const ProductForm: React.FC<ProductFormProps> = ({
     }
   }
 
-  const renderArrayField = (name: "features" | "reasonsToBuy" | "idealFor", label: string) => (
+  const renderArrayField = (
+    name:
+      | "features"
+      | "reasonsToBuy"
+      | "idealFor"
+      | "benefits"
+      | "usage"
+      | "greenDiscounts"
+      | "sustainable"
+      | "certifications",
+    label: string
+  ) => (
     <FormField
       control={form.control}
       name={name}
@@ -520,7 +549,85 @@ export const ProductForm: React.FC<ProductFormProps> = ({
             {renderArrayField("features", "Features")}
             {renderArrayField("reasonsToBuy", "Reasons to Buy")}
             {renderArrayField("idealFor", "Ideal For")}
+            {renderArrayField("benefits", "Benefits")}
+            {renderArrayField("usage", "Usage instructions")}
+            {renderArrayField("greenDiscounts", "Green discounts")}
+            {renderArrayField("sustainable", "Sustainability claims")}
+            {renderArrayField("certifications", "Certifications")}
           </div>
+
+          <FormField
+            control={form.control}
+            name="faq"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>FAQ</FormLabel>
+                <FormControl>
+                  <div className="space-y-3">
+                    {(field.value as { q: string; a: string }[])?.map((row, index) => (
+                      <div key={index} className="flex flex-col gap-2 border rounded-md p-3">
+                        <div className="flex gap-2">
+                          <Input
+                            value={row.q}
+                            placeholder={`Question ${index + 1}`}
+                            onChange={(e) => {
+                              const next = [...(field.value as { q: string; a: string }[])];
+                              next[index] = { ...next[index], q: e.target.value };
+                              field.onChange(next);
+                            }}
+                            disabled={loading}
+                          />
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="icon"
+                            onClick={() =>
+                              field.onChange(
+                                (field.value as { q: string; a: string }[]).filter(
+                                  (_, i) => i !== index
+                                )
+                              )
+                            }
+                            disabled={loading}
+                          >
+                            <Trash className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <Input
+                          value={row.a}
+                          placeholder="Answer"
+                          onChange={(e) => {
+                            const next = [...(field.value as { q: string; a: string }[])];
+                            next[index] = { ...next[index], a: e.target.value };
+                            field.onChange(next);
+                          }}
+                          disabled={loading}
+                        />
+                      </div>
+                    ))}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        field.onChange([
+                          ...((field.value as { q: string; a: string }[]) || []),
+                          { q: "", a: "" },
+                        ])
+                      }
+                      disabled={loading}
+                    >
+                      Add FAQ entry
+                    </Button>
+                  </div>
+                </FormControl>
+                <FormDescription>
+                  Saved as JSON [{"{q, a}"}]. Empty rows are kept as-is — clean before publishing.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
           <Button disabled={loading} className="ml-auto" type="submit">
             {action}

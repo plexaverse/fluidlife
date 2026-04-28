@@ -2,7 +2,7 @@
 
 import axios from "axios";
 import { useState } from "react";
-import { Copy, Eye, FileText, MoreHorizontal, RotateCcw } from "lucide-react";
+import { Copy, Eye, FileText, MoreHorizontal, Printer, RotateCcw } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { apiErrorMessage } from "@/lib/utils";
 import { useRouter } from "next/navigation";
@@ -101,7 +101,13 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
             onClick={onInvoice}
             disabled={!canInvoice || loading}
           >
-            <FileText className="mr-2 h-4 w-4" /> Download invoice
+            <FileText className="mr-2 h-4 w-4" /> Invoice JSON
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => canInvoice && window.open(`/admin/orders/${data.id}/invoice`, "_blank")}
+            disabled={!canInvoice || loading}
+          >
+            <Printer className="mr-2 h-4 w-4" /> Print invoice
           </DropdownMenuItem>
           <DropdownMenuItem
             onClick={() => setRefundOpen(true)}
