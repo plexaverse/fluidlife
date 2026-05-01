@@ -34,11 +34,11 @@ docs
 *.md
 !README.md
 
-# Docker files themselves (no need to copy into the image)
+# Docker meta files (not needed in build context)
 Dockerfile
 .dockerignore
 docker-compose*.yml
-docker-entrypoint.sh
+# docker-entrypoint.sh is intentionally NOT excluded — it's copied into the image
 
 # CI
 .github
