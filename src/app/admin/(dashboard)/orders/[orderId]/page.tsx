@@ -83,6 +83,7 @@ const OrderDetailPage = async ({ params }: PageProps) => {
           totalAmount={total}
           isPaid={order.isPaid}
           status={order.status}
+          paymentType={order.paymentType}
           alreadyRefunded={!!order.refundedAt}
         />
 

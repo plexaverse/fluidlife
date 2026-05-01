@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { Download, Search } from "lucide-react";
 
 import { Heading } from "@/components/ui/heading";
 import { Separator } from "@/components/ui/separator";
@@ -24,7 +25,7 @@ interface OrderClientProps {
   total: number;
   page: number;
   pageSize: number;
-  filters: { status?: string; paymentType?: string; from?: string; to?: string };
+  filters: { status?: string; paymentType?: string; from?: string; to?: string; q?: string };
 }
 
 export const OrderClient: React.FC<OrderClientProps> = ({
@@ -39,6 +40,7 @@ export const OrderClient: React.FC<OrderClientProps> = ({
   const searchParams = useSearchParams();
   const [from, setFrom] = useState(filters.from ?? "");
   const [to, setTo] = useState(filters.to ?? "");
+  const [q, setQ] = useState(filters.q ?? "");
 
   const update = (next: Record<string, string | undefined>) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -51,14 +53,42 @@ export const OrderClient: React.FC<OrderClientProps> = ({
     router.push(qs ? `${pathname}?${qs}` : pathname);
   };
 
-  const filtersActive = !!(filters.status || filters.paymentType || filters.from || filters.to);
+  const filtersActive = !!(filters.status || filters.paymentType || filters.from || filters.to || filters.q);
+
+  // Build export URL matching current filters (date + status only — search not in export).
+  const exportParams = new URLSearchParams();
+  if (filters.status) exportParams.set("status", filters.status);
+  if (filters.from) exportParams.set("from", `${filters.from}T00:00:00`);
+  if (filters.to) exportParams.set("to", `${filters.to}T23:59:59`);
+  const exportHref = `/api/admin/orders/export${exportParams.toString() ? `?${exportParams}` : ""}`;
 
   return (
     <>
-      <Heading title={`Orders (${total})`} description="Manage orders for your store" />
+      <div className="flex items-center justify-between">
+        <Heading title={`Orders (${total})`} description="Manage orders for your store" />
+        <Button variant="outline" size="sm" asChild>
+          <a href={exportHref} download>
+            <Download className="mr-2 h-4 w-4" /> Export CSV
+          </a>
+        </Button>
+      </div>
       <Separator />
 
       <div className="flex flex-wrap items-end gap-2">
+        {/* Search */}
+        <div className="flex items-center gap-1">
+          <Input
+            placeholder="Order ID / phone / name"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && update({ q: q || undefined })}
+            className="w-52"
+          />
+          <Button variant="outline" size="icon" onClick={() => update({ q: q || undefined })}>
+            <Search className="h-4 w-4" />
+          </Button>
+        </div>
+
         <Select value={filters.status ?? "all"} onValueChange={(v) => update({ status: v })}>
           <SelectTrigger className="w-44">
             <SelectValue placeholder="Status" />
@@ -121,6 +151,7 @@ export const OrderClient: React.FC<OrderClientProps> = ({
             onClick={() => {
               setFrom("");
               setTo("");
+              setQ("");
               router.push(pathname);
             }}
           >

@@ -84,13 +84,15 @@ export type OrderNotificationType =
   | "ORDER_CONFIRMED"
   | "ORDER_SHIPPED"
   | "ORDER_DELIVERED"
-  | "ORDER_REFUNDED";
+  | "ORDER_REFUNDED"
+  | "ORDER_CANCELLED";
 
 const SUBJECTS: Record<OrderNotificationType, string> = {
   ORDER_CONFIRMED: "Your Fluidlife order is confirmed",
   ORDER_SHIPPED: "Your Fluidlife order has shipped",
   ORDER_DELIVERED: "Your Fluidlife order was delivered",
   ORDER_REFUNDED: "Your Fluidlife refund has been issued",
+  ORDER_CANCELLED: "Your Fluidlife order has been cancelled",
 };
 
 function html(type: OrderNotificationType, order: { orderId: string; amount: any }): string {
@@ -101,6 +103,7 @@ function html(type: OrderNotificationType, order: { orderId: string; amount: any
     ORDER_SHIPPED: `<p>Your order <b>${order.orderId}</b> is on its way.</p>`,
     ORDER_DELIVERED: `<p>Your order <b>${order.orderId}</b> has been delivered.</p>`,
     ORDER_REFUNDED: `<p>Refund issued for order <b>${order.orderId}</b>.</p>`,
+    ORDER_CANCELLED: `<p>Your order <b>${order.orderId}</b> has been cancelled.</p><p>If you didn't request this, please contact support.</p>`,
   };
   const linkLine = link ? `<p><a href="${link}">View order</a></p>` : "";
   return `<div style="font-family:sans-serif">${body[type]}${linkLine}</div>`;

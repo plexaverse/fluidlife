@@ -27,6 +27,7 @@ interface PageProps {
     paymentType?: string;
     from?: string; // YYYY-MM-DD
     to?: string;
+    q?: string;   // orderId or customer phone search
   }>;
 }
 
@@ -34,6 +35,7 @@ const OrdersPage = async ({ searchParams }: PageProps) => {
   const sp = await searchParams;
   const page = Math.max(1, parseInt(sp.page || "1", 10) || 1);
   const skip = (page - 1) * PAGE_SIZE;
+  const q = sp.q?.trim() ?? "";
 
   const where: any = { deletedAt: null };
   if (sp.status && STATUS_VALUES.has(sp.status)) where.status = sp.status;
@@ -42,6 +44,13 @@ const OrdersPage = async ({ searchParams }: PageProps) => {
     where.createdAt = {};
     if (sp.from) where.createdAt.gte = new Date(`${sp.from}T00:00:00`);
     if (sp.to) where.createdAt.lte = new Date(`${sp.to}T23:59:59`);
+  }
+  if (q) {
+    where.OR = [
+      { orderId: { contains: q, mode: "insensitive" } },
+      { user: { phone: { contains: q } } },
+      { user: { name: { contains: q, mode: "insensitive" } } },
+    ];
   }
 
   const [orders, total] = await Promise.all([
@@ -86,7 +95,7 @@ const OrdersPage = async ({ searchParams }: PageProps) => {
           total={total}
           page={page}
           pageSize={PAGE_SIZE}
-          filters={{ status: sp.status, paymentType: sp.paymentType, from: sp.from, to: sp.to }}
+          filters={{ status: sp.status, paymentType: sp.paymentType, from: sp.from, to: sp.to, q: sp.q }}
         />
       </div>
     </div>

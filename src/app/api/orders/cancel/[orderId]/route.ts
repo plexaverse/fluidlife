@@ -4,6 +4,7 @@ import { requireUser, isResponse } from "@/lib/auth";
 import { apiError } from "@/lib/api-error";
 import { logger } from "@/lib/logger";
 import { corsHeaders } from "@/lib/cors";
+import { notifyOrderEvent } from "@/lib/notify";
 
 const CANCELLABLE = new Set(["PAYMENT_PENDING", "ORDERED"]);
 
@@ -38,10 +39,31 @@ export async function PUT(
       }
 
       // Restore stock for each item.
-      for (const item of order.orderItems) {
-        await tx.product.update({
-          where: { id: item.productId },
-          data: { stock: { increment: item.quantity } },
+      await Promise.all(
+        order.orderItems.map((item) =>
+          tx.product.update({
+            where: { id: item.productId },
+            data: { stock: { increment: item.quantity } },
+          })
+        )
+      );
+
+      // Decrement coupon usage if one was applied.
+      if (order.couponId) {
+        await tx.coupon.updateMany({
+          where: { id: order.couponId, usedCount: { gt: 0 } },
+          data: { usedCount: { decrement: 1 } },
+        });
+      }
+
+      // Release distributor credit if the order consumed it.
+      if (
+        (order.paymentType === "COD" || order.paymentType === "BANK_TRANSFER") &&
+        order.amount.gt(0)
+      ) {
+        await tx.user.update({
+          where: { id: order.userId },
+          data: { creditUsed: { decrement: order.amount } },
         });
       }
 
@@ -55,6 +77,11 @@ export async function PUT(
     if (result.kind === "not_found") return apiError("NOT_FOUND", "Order not found", headers);
     if (result.kind === "forbidden") return apiError("FORBIDDEN", "Not your order", headers);
     if (result.kind === "conflict") return apiError("CONFLICT", `Cannot cancel order in state ${result.status}`, headers);
+
+    notifyOrderEvent(result.order.orderId, "ORDER_CANCELLED").catch((e) =>
+      logger.error("[notify ORDER_CANCELLED]", e, { orderId: result.order.id })
+    );
+
     return NextResponse.json(result.order, { headers });
   } catch (error) {
     logger.error("[ORDER_CANCEL]", error);

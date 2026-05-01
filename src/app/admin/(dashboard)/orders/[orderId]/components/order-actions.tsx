@@ -5,7 +5,16 @@ import axios from "axios";
 import { toast } from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { FileText, Printer, RotateCcw } from "lucide-react";
+import {
+  FileText,
+  Printer,
+  RotateCcw,
+  Truck,
+  CheckCircle,
+  CreditCard,
+  XCircle,
+  Download,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { RefundModal } from "@/components/models/refund-modal";
@@ -20,6 +29,7 @@ interface OrderActionsProps {
   totalAmount: number;
   isPaid: boolean;
   status: string;
+  paymentType: string;
   alreadyRefunded: boolean;
 }
 
@@ -29,13 +39,38 @@ export const OrderActions: React.FC<OrderActionsProps> = ({
   totalAmount,
   isPaid,
   status,
+  paymentType,
   alreadyRefunded,
 }) => {
   const router = useRouter();
   const [refundOpen, setRefundOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const onInvoice = async () => {
+  const canInvoice = status !== "PAYMENT_PENDING" && status !== "CANCELLED";
+  const canRefund = isPaid && !alreadyRefunded && REFUNDABLE.has(status);
+  const canShip = status === "ORDERED";
+  const canDeliver = status === "SHIPPED";
+  const canConfirmPayment =
+    !isPaid &&
+    (paymentType === "COD" || paymentType === "BANK_TRANSFER") &&
+    status !== "CANCELLED" &&
+    status !== "REFUNDED";
+  const canCancel = status === "PAYMENT_PENDING" || status === "ORDERED";
+
+  const post = async (url: string, label: string) => {
+    try {
+      setLoading(true);
+      await axios.post(url);
+      toast.success(`${label} successful`);
+      router.refresh();
+    } catch (error) {
+      toast.error(apiErrorMessage(error, `${label} failed`));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onInvoiceJson = async () => {
     try {
       setLoading(true);
       const res = await axios.get(`/api/orders/${orderDbId}/invoice`);
@@ -62,8 +97,19 @@ export const OrderActions: React.FC<OrderActionsProps> = ({
     }
   };
 
-  const canRefund = isPaid && !alreadyRefunded && REFUNDABLE.has(status);
-  const canInvoice = status !== "PAYMENT_PENDING" && status !== "CANCELLED";
+  const onCancel = async () => {
+    if (!confirm(`Cancel order ${publicOrderId}? This will restore stock and cannot be undone.`)) return;
+    try {
+      setLoading(true);
+      await axios.put(`/api/orders/cancel/${orderDbId}`);
+      toast.success("Order cancelled");
+      router.refresh();
+    } catch (error) {
+      toast.error(apiErrorMessage(error, "Cancel failed"));
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <>
@@ -76,21 +122,67 @@ export const OrderActions: React.FC<OrderActionsProps> = ({
         publicOrderId={publicOrderId}
       />
       <div className="flex flex-wrap gap-2">
-        <Button onClick={onInvoice} disabled={!canInvoice || loading} variant="outline">
+        {/* Invoice actions */}
+        <Button onClick={onInvoiceJson} disabled={!canInvoice || loading} variant="outline" size="sm">
           <FileText className="mr-2 h-4 w-4" /> Invoice JSON
         </Button>
-        <Button asChild disabled={!canInvoice} variant="outline">
+        <Button asChild disabled={!canInvoice} variant="outline" size="sm">
           <Link href={canInvoice ? `/admin/orders/${orderDbId}/invoice` : "#"} target="_blank">
-            <Printer className="mr-2 h-4 w-4" /> Print invoice
+            <Printer className="mr-2 h-4 w-4" /> Print
           </Link>
         </Button>
-        <Button
-          onClick={() => setRefundOpen(true)}
-          disabled={!canRefund || loading}
-          variant="destructive"
-        >
-          <RotateCcw className="mr-2 h-4 w-4" /> Refund
+        <Button asChild disabled={!canInvoice} variant="outline" size="sm">
+          <a href={canInvoice ? `/api/orders/${orderDbId}/invoice/pdf` : "#"} download>
+            <Download className="mr-2 h-4 w-4" /> PDF
+          </a>
         </Button>
+
+        {/* Lifecycle transitions */}
+        {canConfirmPayment && (
+          <Button
+            onClick={() => post(`/api/admin/orders/${orderDbId}/confirm-payment`, "Payment confirmed")}
+            disabled={loading}
+            variant="secondary"
+            size="sm"
+          >
+            <CreditCard className="mr-2 h-4 w-4" /> Confirm payment
+          </Button>
+        )}
+        {canShip && (
+          <Button
+            onClick={() => post(`/api/admin/orders/${orderDbId}/ship`, "Order shipped")}
+            disabled={loading}
+            variant="secondary"
+            size="sm"
+          >
+            <Truck className="mr-2 h-4 w-4" /> Ship
+          </Button>
+        )}
+        {canDeliver && (
+          <Button
+            onClick={() => post(`/api/admin/orders/${orderDbId}/deliver`, "Order delivered")}
+            disabled={loading}
+            variant="secondary"
+            size="sm"
+          >
+            <CheckCircle className="mr-2 h-4 w-4" /> Mark delivered
+          </Button>
+        )}
+        {canRefund && (
+          <Button
+            onClick={() => setRefundOpen(true)}
+            disabled={loading}
+            variant="destructive"
+            size="sm"
+          >
+            <RotateCcw className="mr-2 h-4 w-4" /> Refund
+          </Button>
+        )}
+        {canCancel && (
+          <Button onClick={onCancel} disabled={loading} variant="outline" size="sm">
+            <XCircle className="mr-2 h-4 w-4" /> Cancel
+          </Button>
+        )}
       </div>
     </>
   );
