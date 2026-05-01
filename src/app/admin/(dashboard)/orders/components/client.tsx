@@ -129,7 +129,7 @@ export const OrderClient: React.FC<OrderClientProps> = ({
         )}
       </div>
 
-      <DataTable searchKey="products" columns={columns} data={data} />
+      <DataTable columns={columns} data={data} hidePagination />
       <Pagination total={total} page={page} pageSize={pageSize} />
     </>
   );

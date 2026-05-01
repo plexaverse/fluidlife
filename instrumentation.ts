@@ -12,15 +12,9 @@ export async function register(): Promise<void> {
       tracesSampleRate: Number(process.env.SENTRY_TRACES_SAMPLE_RATE ?? "0.1"),
       enabled: process.env.NODE_ENV === "production",
     });
-  } catch (e) {
+  } catch {
     // Sentry not installed yet — leave a hint and continue without it.
-    process.stderr.write(
-      JSON.stringify({
-        severity: "WARNING",
-        time: new Date().toISOString(),
-        message: "Sentry SDK not installed; install @sentry/nextjs to enable error reporting",
-      }) + "\n"
-    );
+    console.warn("Sentry SDK not installed; install @sentry/nextjs to enable error reporting");
   }
 }
 

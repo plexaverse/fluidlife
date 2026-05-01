@@ -1,22 +1,26 @@
 import "server-only";
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
-import { env } from "./env";
 import { apiError } from "./api-error";
+
+function redisConfigured(): boolean {
+  return Boolean(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
+}
 
 let redisClient: Redis | null = null;
 function redis(): Redis {
   if (!redisClient) {
     redisClient = new Redis({
-      url: env.UPSTASH_REDIS_REST_URL,
-      token: env.UPSTASH_REDIS_REST_TOKEN,
+      url: process.env.UPSTASH_REDIS_REST_URL!,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN!,
     });
   }
   return redisClient;
 }
 
 const limiters = new Map<string, Ratelimit>();
-function limiter(key: string, tokens: number, window: `${number} ${"s" | "m" | "h" | "d"}`): Ratelimit {
+function limiter(key: string, tokens: number, window: `${number} ${"s" | "m" | "h" | "d"}`): Ratelimit | null {
+  if (!redisConfigured()) return null;
   let l = limiters.get(key);
   if (!l) {
     l = new Ratelimit({
@@ -46,10 +50,11 @@ function clientIp(req: Request): string {
 
 export async function enforceRateLimit(
   req: Request,
-  l: Ratelimit,
+  l: Ratelimit | null,
   identifier?: string,
   responseHeaders?: HeadersInit
 ): Promise<Response | null> {
+  if (!l) return null;
   const id = identifier ? `${clientIp(req)}:${identifier}` : clientIp(req);
   const { success, limit, remaining, reset } = await l.limit(id);
   const headers: Record<string, string> = {
