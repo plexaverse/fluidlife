@@ -48,6 +48,15 @@ export const env = {
   get UPSTASH_REDIS_REST_TOKEN() {
     return required("UPSTASH_REDIS_REST_TOKEN");
   },
+  get SUPABASE_URL() {
+    return required("SUPABASE_URL");
+  },
+  get SUPABASE_SERVICE_ROLE_KEY() {
+    return required("SUPABASE_SERVICE_ROLE_KEY");
+  },
+  get SUPABASE_STORAGE_BUCKET(): string {
+    return process.env.SUPABASE_STORAGE_BUCKET || "images";
+  },
 
   // ─── Optional ─────────────────────────────────────────────────────
   get ALLOWED_ORIGINS(): string[] {
