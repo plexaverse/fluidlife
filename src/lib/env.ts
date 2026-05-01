@@ -42,20 +42,11 @@ export const env = {
   get SHIPROCKET_WEBHOOK_TOKEN() {
     return required("SHIPROCKET_WEBHOOK_TOKEN");
   },
-  get UPSTASH_REDIS_REST_URL() {
-    return required("UPSTASH_REDIS_REST_URL");
-  },
-  get UPSTASH_REDIS_REST_TOKEN() {
-    return required("UPSTASH_REDIS_REST_TOKEN");
-  },
   get SUPABASE_URL() {
     return required("SUPABASE_URL");
   },
   get SUPABASE_SERVICE_ROLE_KEY() {
     return required("SUPABASE_SERVICE_ROLE_KEY");
-  },
-  get SUPABASE_STORAGE_BUCKET(): string {
-    return process.env.SUPABASE_STORAGE_BUCKET || "images";
   },
 
   // ─── Optional ─────────────────────────────────────────────────────
@@ -71,6 +62,14 @@ export const env = {
     return optional("RAZORPAY_KEY_SECRET");
   },
 
+  // Upstash Redis (optional — rate limiting degrades gracefully when absent)
+  get UPSTASH_REDIS_REST_URL() {
+    return optional("UPSTASH_REDIS_REST_URL");
+  },
+  get UPSTASH_REDIS_REST_TOKEN() {
+    return optional("UPSTASH_REDIS_REST_TOKEN");
+  },
+
   // Notifications
   get RESEND_API_KEY() {
     return optional("RESEND_API_KEY");
@@ -80,6 +79,22 @@ export const env = {
   },
   get STORE_URL() {
     return optional("STORE_URL");
+  },
+
+  // Supabase Storage bucket (defaults to "images")
+  get SUPABASE_STORAGE_BUCKET(): string {
+    return process.env.SUPABASE_STORAGE_BUCKET || "images";
+  },
+
+  // Shiprocket (optional — only needed for the ship endpoint)
+  get SHIPROCKET_EMAIL() {
+    return optional("SHIPROCKET_EMAIL");
+  },
+  get SHIPROCKET_PASSWORD() {
+    return optional("SHIPROCKET_PASSWORD");
+  },
+  get SHIPROCKET_PICKUP_LOCATION() {
+    return optional("SHIPROCKET_PICKUP_LOCATION");
   },
 
   // Seller info (for GST-compliant invoices)

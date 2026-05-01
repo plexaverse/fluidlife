@@ -34,6 +34,30 @@ async function sendEmail(p: EmailParams): Promise<{ ok: boolean; error?: string 
   }
 }
 
+async function sendSms(p: {
+  phone: string;
+  template: string;
+  orderId: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const key = env.TWO_FACTOR_AUTH_KEY;
+  const baseUrl = env.TWO_FACTOR_BASE_URL;
+  try {
+    const url = `${baseUrl}/${key}/TRANS_SMS/AUTOGEN/${p.template}/${p.phone}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      return { ok: false, error: `2Factor ${res.status}: ${body.slice(0, 200)}` };
+    }
+    const json = await res.json().catch(() => ({}));
+    if (json.Status === "Error") {
+      return { ok: false, error: json.Details ?? "2Factor error" };
+    }
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, error: e?.message ?? "SMS error" };
+  }
+}
+
 async function logSent(params: {
   channel: "email" | "sms";
   recipient: string;
@@ -119,7 +143,21 @@ export async function notifyOrderEvent(orderRef: string, type: OrderNotification
     });
   }
 
-  // SMS: in India, transactional SMS requires a pre-registered DLT template.
-  // Wire your 2Factor template name to env (e.g. SMS_TEMPLATE_ORDER_CONFIRMED).
-  // Leaving SMS as no-op here keeps the build green; populate when DLT-approved.
+  // SMS via 2Factor — template names must be pre-registered on DLT.
+  const smsTemplateKey = `SMS_TEMPLATE_${type}` as keyof NodeJS.ProcessEnv;
+  const smsTemplate = process.env[smsTemplateKey];
+  const phone = order.user.phone;
+
+  if (smsTemplate && phone) {
+    const smsResult = await sendSms({ phone, template: smsTemplate, orderId: order.orderId });
+    await logSent({
+      channel: "sms",
+      recipient: phone,
+      template: type,
+      refType: "order",
+      refId: order.id,
+      status: smsResult.ok ? "sent" : "failed",
+      error: smsResult.error,
+    });
+  }
 }
