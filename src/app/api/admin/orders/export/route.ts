@@ -35,12 +35,12 @@ export async function GET(req: Request) {
       return apiError("BAD_REQUEST", `Invalid status: ${statusParam}`);
     }
 
-    const where: Parameters<typeof prismadb.order.findMany>[0]["where"] = {};
-    if (statusParam) where.status = statusParam as any;
+    const where: any = {};
+    if (statusParam) where.status = statusParam;
     if (from || to) {
       where.createdAt = {};
-      if (from) (where.createdAt as any).gte = new Date(from);
-      if (to) (where.createdAt as any).lte = new Date(to);
+      if (from) where.createdAt.gte = new Date(from);
+      if (to) where.createdAt.lte = new Date(to);
     }
 
     const orders = await prismadb.order.findMany({
