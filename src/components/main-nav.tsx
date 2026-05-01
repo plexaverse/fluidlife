@@ -20,6 +20,7 @@ export function MainNav({ className, ...props }: React.HTMLAttributes<HTMLElemen
     { href: "/admin/reconcile", label: "Reconcile" },
     { href: "/admin/notifications", label: "Notifications" },
     { href: "/admin/webhooks", label: "Webhooks" },
+    { href: "/admin/features", label: "Features" },
   ];
 
   return (

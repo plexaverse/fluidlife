@@ -26,6 +26,7 @@ export function MobileNav() {
     { href: "/admin/reconcile", label: "Reconcile" },
     { href: "/admin/notifications", label: "Notifications" },
     { href: "/admin/webhooks", label: "Webhooks" },
+    { href: "/admin/features", label: "Features" },
   ];
 
   return (
