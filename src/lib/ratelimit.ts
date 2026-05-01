@@ -40,6 +40,7 @@ export const rateLimits = {
   adminLogin: () => limiter("adminLogin", 10, "10 m"),
   enquirySubmit: () => limiter("enquirySubmit", 5, "1 h"),
   couponValidate: () => limiter("couponValidate", 30, "1 m"),
+  checkout: () => limiter("checkout", 5, "10 m"),
 };
 
 function clientIp(req: Request): string {

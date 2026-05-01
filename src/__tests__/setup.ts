@@ -12,4 +12,5 @@ process.env.RAZORPAY_WEBHOOK_SECRET ??= "test-rzp";
 process.env.SHIPROCKET_WEBHOOK_TOKEN ??= "test-shiprocket";
 process.env.UPSTASH_REDIS_REST_URL ??= "https://example.invalid";
 process.env.UPSTASH_REDIS_REST_TOKEN ??= "test-redis";
-process.env.NODE_ENV ??= "test";
+process.env.SUPABASE_URL ??= "https://example.invalid";
+process.env.SUPABASE_SERVICE_ROLE_KEY ??= "test-supabase-key";

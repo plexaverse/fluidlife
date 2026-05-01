@@ -47,23 +47,21 @@ export async function ensureInvoiceNumber(orderId: string): Promise<string> {
   if (existing.invoiceNumber) return existing.invoiceNumber;
 
   const number = await allocateInvoiceNumber();
-  try {
-    await prismadb.order.update({
-      where: { id: orderId, invoiceNumber: null },
-      data: { invoiceNumber: number },
+  // updateMany accepts null in the where filter; count=0 means a concurrent
+  // request already assigned an invoice number — re-read in that case.
+  const { count } = await prismadb.order.updateMany({
+    where: { id: orderId, invoiceNumber: null },
+    data: { invoiceNumber: number },
+  });
+  if (count === 0) {
+    const o = await prismadb.order.findUnique({
+      where: { id: orderId },
+      select: { invoiceNumber: true },
     });
-    return number;
-  } catch (e: any) {
-    // Race: another request issued one first. Re-read.
-    if (e?.code === "P2025" || e?.code === "P2002") {
-      const o = await prismadb.order.findUnique({
-        where: { id: orderId },
-        select: { invoiceNumber: true },
-      });
-      if (o?.invoiceNumber) return o.invoiceNumber;
-    }
-    throw e;
+    if (o?.invoiceNumber) return o.invoiceNumber;
+    throw new Error(`Order ${orderId} not found`);
   }
+  return number;
 }
 
 export async function buildInvoicePayload(orderId: string) {

@@ -2,6 +2,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
+vi.mock("@/lib/ratelimit", () => ({
+  enforceRateLimit: vi.fn().mockResolvedValue(null),
+  rateLimits: { checkout: vi.fn().mockReturnValue(null) },
+}));
+
 vi.mock("@/lib/auth", () => ({
   requireUser: vi.fn().mockResolvedValue({
     userId: "user-1",

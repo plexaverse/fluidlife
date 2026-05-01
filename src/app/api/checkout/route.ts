@@ -6,6 +6,7 @@ import { requireUser, isResponse } from "@/lib/auth";
 import { apiError, apiValidationError } from "@/lib/api-error";
 import { logger } from "@/lib/logger";
 import { corsHeaders } from "@/lib/cors";
+import { enforceRateLimit, rateLimits } from "@/lib/ratelimit";
 import { safeJson } from "@/lib/safe-json";
 import { checkoutSchema } from "@/lib/schemas";
 import { computeTaxLine, summarizeTax, isInterState, type TaxLine } from "@/lib/gst";
@@ -26,6 +27,9 @@ export async function POST(req: Request) {
   const headers = corsHeaders(req);
   const session = await requireUser(req);
   if (isResponse(session)) return session;
+
+  const limited = await enforceRateLimit(req, rateLimits.checkout(), session.userId, headers);
+  if (limited) return limited;
 
   try {
     const r = await safeJson(req, { headers });
@@ -244,15 +248,17 @@ export async function POST(req: Request) {
       const amount = grossAfterDiscount.plus(delivery);
 
       // ─── 8. Distributor credit limit (COD / BANK_TRANSFER) ─────────────
+      // Atomic check-and-increment: WHERE clause prevents exceeding the limit
+      // even under concurrent requests (no read-check-write race condition).
       if (onCredit && user.creditLimit !== null) {
-        const newUsed = new Prisma.Decimal(user.creditUsed).plus(amount);
-        if (newUsed.gt(user.creditLimit)) {
-          return { kind: "credit" as const };
-        }
-        await tx.user.update({
-          where: { id: session.userId },
+        const updated = await tx.user.updateMany({
+          where: {
+            id: session.userId,
+            creditUsed: { lte: new Prisma.Decimal(user.creditLimit).minus(amount) },
+          },
           data: { creditUsed: { increment: amount } },
         });
+        if (updated.count !== 1) return { kind: "credit" as const };
       }
 
       // ─── 9. Order ───────────────────────────────────────────────────────
