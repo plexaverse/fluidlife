@@ -11,6 +11,7 @@ import { safeJson } from "@/lib/safe-json";
 import { checkoutSchema } from "@/lib/schemas";
 import { computeTaxLine, summarizeTax, isInterState, type TaxLine } from "@/lib/gst";
 import { env } from "@/lib/env";
+import { trackEvent } from "@/lib/analytics";
 
 const ZERO = new Prisma.Decimal(0);
 const DELIVERY_GST_RATE = new Prisma.Decimal(18);
@@ -311,6 +312,12 @@ export async function POST(req: Request) {
     if (result.kind === "coupon") return apiError("BAD_REQUEST", result.message, headers);
     if (result.kind === "credit") return apiError("CONFLICT", "Credit limit exceeded", headers);
 
+    trackEvent("order.created", {
+      orderId: result.order.orderId,
+      userId: result.order.userId,
+      amount: String(result.order.amount),
+      paymentType: result.order.paymentType,
+    });
     return NextResponse.json(result.order, { headers });
   } catch (error: any) {
     if (error?.code === "P2002") {

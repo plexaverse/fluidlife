@@ -5,6 +5,7 @@ import { env } from "@/lib/env";
 import { logger } from "@/lib/logger";
 import { readBody } from "@/lib/safe-json";
 import { notifyOrderEvent } from "@/lib/notify";
+import { trackEvent } from "@/lib/analytics";
 
 function timingSafeEqualHex(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
@@ -65,10 +66,10 @@ export async function POST(req: Request) {
         },
       });
       if (updated.count > 0) {
-        // Best-effort, non-blocking notification.
         notifyOrderEvent(orderRef, "ORDER_CONFIRMED").catch((e) =>
           logger.error("[notify ORDER_CONFIRMED]", e, { orderRef })
         );
+        trackEvent("order.paid", { orderId: orderRef });
       }
       return NextResponse.json({ status: "ok", updated: updated.count });
     }

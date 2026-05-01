@@ -5,6 +5,7 @@ import { env } from "@/lib/env";
 import { safeJson } from "@/lib/safe-json";
 import { logger } from "@/lib/logger";
 import { notifyOrderEvent } from "@/lib/notify";
+import { trackEvent } from "@/lib/analytics";
 
 function safeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
@@ -75,6 +76,14 @@ export async function POST(req: Request) {
         logger.error(`[notify ${evt}]`, e, { orderId: order.id })
       );
     }
+
+    const analyticsEvt =
+      newStatus === "SHIPPED" ? "order.shipped"
+      : newStatus === "DELIVERED" ? "order.delivered"
+      : newStatus === "CANCELLED" ? "order.cancelled"
+      : newStatus === "REFUNDED" ? "order.refunded"
+      : null;
+    if (analyticsEvt) trackEvent(analyticsEvt, { orderId: order.orderId });
 
     return NextResponse.json({ status: "ok", orderId: order.id, newStatus });
   } catch (error) {

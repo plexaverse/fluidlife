@@ -8,6 +8,7 @@ import { corsHeaders } from "@/lib/cors";
 import { safeJson } from "@/lib/safe-json";
 import { createRefund } from "@/lib/razorpay";
 import { notifyOrderEvent } from "@/lib/notify";
+import { trackEvent } from "@/lib/analytics";
 import { env } from "@/lib/env";
 
 const REFUNDABLE = new Set(["ORDERED", "SHIPPED", "DELIVERED"]);
@@ -115,6 +116,11 @@ export async function POST(
     notifyOrderEvent(order.orderId, "ORDER_REFUNDED").catch((e) =>
       logger.error("[notify ORDER_REFUNDED]", e, { orderId: order.id })
     );
+    trackEvent("order.refunded", {
+      orderId: order.orderId,
+      userId: order.userId,
+      amount: refundAmount.toFixed(2),
+    });
 
     return NextResponse.json(
       {
