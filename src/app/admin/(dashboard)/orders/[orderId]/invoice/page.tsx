@@ -36,7 +36,7 @@ const InvoicePrintPage = async ({ params }: PageProps) => {
           Invoice <span className="font-mono">{inv.invoice.number ?? "(unissued)"}</span>{" "}
           for order <span className="font-mono">{inv.invoice.orderId}</span>
         </p>
-        <PrintButton />
+        <PrintButton orderId={orderId} />
       </div>
 
       <div className="print-page max-w-4xl mx-auto p-12 space-y-8 shadow-sm">
