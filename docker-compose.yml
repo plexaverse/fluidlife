@@ -1,0 +1,32 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    image: fluidlife:latest
+    container_name: fluidlife
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+
+    # All secrets and config come from the environment — never baked into the image.
+    # For local testing copy .env.example → .env and fill in values.
+    env_file:
+      - .env
+
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+
+      # Set to "true" on first deploy or after adding new migrations.
+      # Leave unset (or "false") for normal restarts.
+      RUN_MIGRATIONS: "false"
+
+    # Health check — uses the /api/health endpoint added in Phase 2.
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s

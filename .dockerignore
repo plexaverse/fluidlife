@@ -1,0 +1,49 @@
+# Dependencies — rebuilt inside the image
+node_modules
+
+# Next.js build output — rebuilt inside the image
+.next
+out
+
+# Local environment files — NEVER bake secrets into the image
+.env
+.env.*
+!.env.example
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Editor / OS
+.DS_Store
+*.swp
+*.swo
+.idea
+.vscode
+
+# Tests — not needed at runtime
+**/__tests__
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+vitest.config.*
+
+# Docs
+docs
+*.md
+!README.md
+
+# Docker files themselves (no need to copy into the image)
+Dockerfile
+.dockerignore
+docker-compose*.yml
+docker-entrypoint.sh
+
+# CI
+.github
+.claude
+
+# Logs
+*.log
+npm-debug.log*
