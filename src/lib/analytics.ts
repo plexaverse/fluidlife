@@ -11,7 +11,7 @@ export type AnalyticsEventName =
 
 export interface AnalyticsEvent {
   event: AnalyticsEventName;
-  orderId: string;
+  orderId?: string;
   userId?: string;
   amount?: string;
   paymentType?: string;
