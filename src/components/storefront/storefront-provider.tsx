@@ -7,6 +7,7 @@ import { useAuthStore, isTokenValid } from "@/stores/auth-store";
 import { useWishlistStore } from "@/stores/wishlist-store";
 
 import { CartDrawer } from "./cart-drawer";
+import { ForceLightTheme } from "./force-light-theme";
 import { GlobalLoader } from "./global-loader";
 import { LoginModal } from "./login-modal";
 
@@ -53,6 +54,8 @@ export function StorefrontProvider({ children }: { children: React.ReactNode }) 
 
   return (
     <>
+      {/* Storefront is light-only; admin + distributor keep their theme toggle. */}
+      <ForceLightTheme />
       {children}
       <Toaster
         position="top-right"
