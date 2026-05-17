@@ -7,7 +7,6 @@ import { useAuthStore, isTokenValid } from "@/stores/auth-store";
 import { useWishlistStore } from "@/stores/wishlist-store";
 
 import { CartDrawer } from "./cart-drawer";
-import { ForceLightTheme } from "./force-light-theme";
 import { GlobalLoader } from "./global-loader";
 import { LoginModal } from "./login-modal";
 
@@ -54,8 +53,9 @@ export function StorefrontProvider({ children }: { children: React.ReactNode }) 
 
   return (
     <>
-      {/* Storefront is light-only; admin + distributor keep their theme toggle. */}
-      <ForceLightTheme />
+      {/* Light-mode lock is handled by the pathname-aware ThemeProvider in the
+          root layout — it passes forcedTheme="light" for any path that isn't
+          /admin or /distributor. */}
       {children}
       <Toaster
         position="top-right"
