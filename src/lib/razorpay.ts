@@ -90,3 +90,50 @@ export async function listPayments(params: {
   if (params.skip !== undefined) q.set("skip", String(params.skip));
   return call(`/payments?${q.toString()}`, { method: "GET" });
 }
+
+// ── Orders API ────────────────────────────────────────────────────────────
+
+export type RazorpayOrder = {
+  id: string;
+  entity: "order";
+  amount: number;
+  amount_paid: number;
+  amount_due: number;
+  currency: string;
+  receipt: string | null;
+  status: "created" | "attempted" | "paid";
+  notes: Record<string, string>;
+  created_at: number;
+};
+
+/**
+ * Create a Razorpay order. The returned `id` ("order_X…") is what we save as
+ * `Order.razorpayOrderId` and pass to the client SDK as `order_id`. This binds
+ * the customer's payment to a server-known amount, so the amount can't be
+ * tampered with client-side before the user pays.
+ *
+ * Required for live keys; recommended for test keys too.
+ */
+export async function createRazorpayOrder(params: {
+  amount: number; // paise (integer)
+  currency?: "INR";
+  /** Our public Order.orderId — surfaces in the Razorpay dashboard for support */
+  receipt: string;
+  notes?: Record<string, string>;
+  /** Razorpay supports per-order idempotency via this header */
+  idempotencyKey?: string;
+}): Promise<RazorpayOrder> {
+  return call<RazorpayOrder>("/orders", {
+    method: "POST",
+    body: JSON.stringify({
+      amount: Math.round(params.amount),
+      currency: params.currency ?? "INR",
+      receipt: params.receipt,
+      ...(params.notes && { notes: params.notes }),
+      payment_capture: 1, // auto-capture on successful payment
+    }),
+    headers: {
+      ...(params.idempotencyKey && { "X-Razorpay-Idempotency-Key": params.idempotencyKey }),
+    },
+  });
+}

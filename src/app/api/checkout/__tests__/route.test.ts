@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
@@ -17,8 +17,12 @@ vi.mock("@/lib/auth", () => ({
     !!x && typeof x === "object" && "status" in (x as any) && typeof (x as any).status === "number",
 }));
 
+vi.mock("@/lib/razorpay", () => ({
+  createRazorpayOrder: vi.fn(),
+}));
+
 vi.mock("@/lib/prismadb", () => {
-  const order = { findUnique: vi.fn(), create: vi.fn() };
+  const order = { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() };
   const address = { findUnique: vi.fn() };
   const product = { findMany: vi.fn(), updateMany: vi.fn() };
   const coupon = { findUnique: vi.fn(), updateMany: vi.fn(), update: vi.fn() };
@@ -36,10 +40,15 @@ vi.mock("@/lib/prismadb", () => {
 });
 
 import prismadb from "@/lib/prismadb";
+import { createRazorpayOrder } from "@/lib/razorpay";
 import { POST } from "@/app/api/checkout/route";
 
 const mocked = prismadb as unknown as {
-  order: { findUnique: ReturnType<typeof vi.fn>; create: ReturnType<typeof vi.fn> };
+  order: {
+    findUnique: ReturnType<typeof vi.fn>;
+    create: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
+  };
   address: { findUnique: ReturnType<typeof vi.fn> };
   product: { findMany: ReturnType<typeof vi.fn>; updateMany: ReturnType<typeof vi.fn> };
   coupon: {
@@ -50,6 +59,7 @@ const mocked = prismadb as unknown as {
   user: { findUnique: ReturnType<typeof vi.fn>; update: ReturnType<typeof vi.fn> };
   $transaction: ReturnType<typeof vi.fn>;
 };
+const mockedCreateRazorpayOrder = createRazorpayOrder as unknown as ReturnType<typeof vi.fn>;
 
 function makeRequest(body: unknown): Request {
   return new Request("http://localhost/api/checkout", {
@@ -85,6 +95,14 @@ const productRow = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Default: no Razorpay creds → ensureRazorpayOrder is a no-op.
+  delete process.env.RAZORPAY_KEY_ID;
+  delete process.env.RAZORPAY_KEY_SECRET;
+});
+
+afterEach(() => {
+  delete process.env.RAZORPAY_KEY_ID;
+  delete process.env.RAZORPAY_KEY_SECRET;
 });
 
 describe("POST /api/checkout", () => {
@@ -98,6 +116,7 @@ describe("POST /api/checkout", () => {
       id: "order-1",
       userId: "user-1",
       orderId: "ORD-XXX",
+      razorpayOrderId: null,
       ...args.data,
       orderItems: [{ productId: "prod-1", quantity: 2, priceAtPurchase: "100" }],
     }));
@@ -121,22 +140,97 @@ describe("POST /api/checkout", () => {
     expect(createArgs.data.subtotalAmount).toBeDefined();
     expect(createArgs.data.taxAmount).toBeDefined();
     expect(createArgs.data.paymentExpiresAt).toBeInstanceOf(Date);
+
+    // No Razorpay creds in this test → server-side create skipped.
+    expect(mockedCreateRazorpayOrder).not.toHaveBeenCalled();
   });
 
-  it("idempotency replay: existing order returned without re-creating", async () => {
+  it("PREPAID with razorpay creds: binds order to a server-created Razorpay order", async () => {
+    process.env.RAZORPAY_KEY_ID = "rzp_test_x";
+    process.env.RAZORPAY_KEY_SECRET = "secret";
+
+    mocked.order.findUnique.mockResolvedValue(null);
+    mocked.user.findUnique.mockResolvedValue(approvedCustomer);
+    mocked.address.findUnique.mockResolvedValue({ userId: "user-1", state: "Karnataka" });
+    mocked.product.findMany.mockResolvedValue([productRow]);
+    mocked.product.updateMany.mockResolvedValue({ count: 1 });
+    mocked.order.create.mockImplementation(async (args: any) => ({
+      id: "order-1",
+      userId: "user-1",
+      razorpayOrderId: null,
+      amount: "200",
+      ...args.data,
+      // orderId is server-generated; we don't pin a value, we just read it back
+      orderItems: [{ productId: "prod-1", quantity: 2, priceAtPurchase: "100" }],
+    }));
+    mockedCreateRazorpayOrder.mockResolvedValueOnce({
+      id: "order_rzp_ABC",
+      entity: "order",
+      amount: 20000,
+      currency: "INR",
+      status: "created",
+      receipt: null,
+    });
+    mocked.order.update.mockImplementation(async (args: any) => ({
+      id: "order-1",
+      userId: "user-1",
+      amount: "200",
+      paymentType: "PREPAID",
+      razorpayOrderId: args.data.razorpayOrderId,
+    }));
+
+    const res = await POST(makeRequest(validBody));
+    expect(res.status).toBe(200);
+    const json = await res.json();
+
+    expect(mockedCreateRazorpayOrder).toHaveBeenCalledOnce();
+    const rzpArgs = mockedCreateRazorpayOrder.mock.calls[0][0];
+    const createdOrderId = mocked.order.create.mock.calls[0][0].data.orderId;
+    expect(rzpArgs.receipt).toBe(createdOrderId);
+    expect(rzpArgs.amount).toBe(20000); // 200 × 100 paise
+    expect(rzpArgs.notes).toEqual({ orderId: createdOrderId });
+
+    expect(mocked.order.update).toHaveBeenCalledWith({
+      where: { id: "order-1" },
+      data: { razorpayOrderId: "order_rzp_ABC" },
+    });
+    expect(json.razorpayOrderId).toBe("order_rzp_ABC");
+  });
+
+  it("idempotency replay: existing order returned + heals missing razorpayOrderId", async () => {
+    process.env.RAZORPAY_KEY_ID = "rzp_test_x";
+    process.env.RAZORPAY_KEY_SECRET = "secret";
+
     const existing = {
       id: "order-1",
       userId: "user-1",
       orderId: "ORD-EXISTING",
+      amount: "150",
+      paymentType: "PREPAID",
+      razorpayOrderId: null,
       orderItems: [],
     };
     mocked.order.findUnique.mockResolvedValueOnce(existing);
+    mockedCreateRazorpayOrder.mockResolvedValueOnce({
+      id: "order_rzp_HEALED",
+      entity: "order",
+      amount: 15000,
+      currency: "INR",
+      status: "created",
+      receipt: "ORD-EXISTING",
+    });
+    mocked.order.update.mockImplementation(async (args: any) => ({
+      ...existing,
+      razorpayOrderId: args.data.razorpayOrderId,
+    }));
 
     const res = await POST(makeRequest({ ...validBody, idempotencyKey: "abcdef1234567890" }));
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.id).toBe("order-1");
+    expect(json.razorpayOrderId).toBe("order_rzp_HEALED");
 
+    // Critical: no fresh transaction or stock decrement.
     expect(mocked.$transaction).not.toHaveBeenCalled();
     expect(mocked.product.updateMany).not.toHaveBeenCalled();
     expect(mocked.order.create).not.toHaveBeenCalled();
