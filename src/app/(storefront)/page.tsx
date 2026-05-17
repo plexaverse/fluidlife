@@ -8,7 +8,10 @@ import { ProductCard } from "@/components/storefront/product-card";
 import { CategoryCard } from "@/components/storefront/category-card";
 import type { ProductSummary } from "@/types/storefront";
 
-export const revalidate = 300; // 5 min ISR
+// Render on demand — page reads from Postgres, which we can't assume is
+// reachable at build time. Per-request renders are still fast because the
+// underlying queries hit our connection pool + Next's data cache.
+export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   const [{ products: featured }, categories] = await Promise.all([

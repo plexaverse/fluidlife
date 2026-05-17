@@ -1,5 +1,25 @@
 import "server-only";
 import prismadb from "@/lib/prismadb";
+import type { ProductSummary } from "@/types/storefront";
+
+// ── Decimal → string serialization ───────────────────────────────────────
+// Prisma's Decimal class can't cross the Server-Component → Client-Component
+// boundary as-is (JSON.stringify produces an opaque struct). Convert every
+// Decimal field to a string before returning so the props match
+// `ProductSummary` (string-typed money fields) on the client.
+
+type PrismaProductRow = Awaited<ReturnType<typeof prismadb.product.findFirst>>;
+
+function serializeProduct<T extends NonNullable<PrismaProductRow>>(p: T) {
+  return {
+    ...p,
+    price: p.price.toString(),
+    b2bPrice: p.b2bPrice ? p.b2bPrice.toString() : null,
+    originalPrice: p.originalPrice.toString(),
+    deliveryPrice: p.deliveryPrice.toString(),
+    gstRate: p.gstRate.toString(),
+  };
+}
 
 /**
  * Public product listing — mirrors GET /api/products' read shape so the
@@ -12,7 +32,7 @@ export async function getPublicProducts(params?: {
   q?: string;
   take?: number;
   skip?: number;
-}) {
+}): Promise<{ products: ProductSummary[]; total: number }> {
   const take = Math.min(Math.max(params?.take ?? 50, 1), 100);
   const skip = Math.max(params?.skip ?? 0, 0);
 
@@ -30,10 +50,7 @@ export async function getPublicProducts(params?: {
     } else {
       const search = q.split(/\s+/).filter(Boolean).join(" & ");
       textFilter = {
-        OR: [
-          { name: { search } },
-          { description: { search } },
-        ],
+        OR: [{ name: { search } }, { description: { search } }],
       };
     }
   }
@@ -72,16 +89,17 @@ export async function getPublicProducts(params?: {
   }
 
   const products = rows.map((p) => ({
-    ...p,
+    ...serializeProduct(p),
     averageRating: +Number(ratingMap.get(p.id) ?? 0).toFixed(2),
     totalReviews: p._count.reviews,
-  }));
+  })) as unknown as ProductSummary[];
 
   return { products, total };
 }
 
 /**
- * Single public product. Returns null if archived or not found.
+ * Single public product (with billboard for category context). Returns null
+ * if archived or not found.
  */
 export async function getPublicProduct(id: string) {
   const product = await prismadb.product.findFirst({
@@ -100,7 +118,8 @@ export async function getPublicProduct(id: string) {
   });
 
   return {
-    ...product,
+    ...serializeProduct(product),
+    category: product.category, // preserve the billboard include
     averageRating: +Number(agg._avg.rating ?? 0).toFixed(2),
     totalReviews: agg._count,
   };

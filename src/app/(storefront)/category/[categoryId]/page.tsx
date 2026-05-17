@@ -9,6 +9,8 @@ import { ProductCard } from "@/components/storefront/product-card";
 import { Pagination } from "@/components/ui/pagination";
 import type { ProductSummary } from "@/types/storefront";
 
+export const dynamic = "force-dynamic";
+
 const PAGE_SIZE = 24;
 
 interface PageProps {

@@ -14,7 +14,7 @@ import { ProductGallery } from "./components/product-gallery";
 import { ProductFaq } from "./components/product-faq";
 import { ProductReviews } from "./components/product-reviews";
 
-export const revalidate = 300;
+export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: Promise<{ productId: string }>;
