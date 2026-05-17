@@ -6,6 +6,7 @@ import { formatter } from "@/lib/utils";
 import type { ProductSummary } from "@/types/storefront";
 
 import { AddToCartButton } from "./add-to-cart-button";
+import { WishlistButton } from "./wishlist-button";
 
 interface ProductCardProps {
   product: ProductSummary;
@@ -40,11 +41,15 @@ export function ProductCard({ product, compact }: ProductCardProps) {
           </span>
         )}
         {product.stock <= 0 && (
-          <span className="absolute right-3 top-3 rounded-full bg-black/70 px-2 py-0.5 text-xs font-medium text-white">
+          <span className="absolute left-3 bottom-3 rounded-full bg-black/70 px-2 py-0.5 text-xs font-medium text-white">
             Out of stock
           </span>
         )}
       </Link>
+      <WishlistButton
+        productId={product.id}
+        className="absolute right-3 top-3"
+      />
 
       <div className="flex flex-1 flex-col gap-2 p-4">
         <Link href={`/product/${product.id}`} className="line-clamp-2 text-sm font-medium hover:underline">

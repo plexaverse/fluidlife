@@ -6,6 +6,7 @@ import { Check, Leaf, Shield, Star, Truck } from "lucide-react";
 import { getPublicProduct } from "@/services/server/products";
 import { getPublicReviews } from "@/services/server/reviews";
 import { AddToCartButton } from "@/components/storefront/add-to-cart-button";
+import { WishlistButton } from "@/components/storefront/wishlist-button";
 import { formatter } from "@/lib/utils";
 import type { ProductSummary } from "@/types/storefront";
 
@@ -128,9 +129,12 @@ export default async function ProductDetailPage({ params }: PageProps) {
             </ul>
           )}
 
-          {/* Add to cart */}
+          {/* Add to cart + save */}
           <div className="pt-4 border-t">
-            <AddToCartButton product={product as ProductSummary} className="w-full sm:w-auto" />
+            <div className="flex flex-wrap gap-2">
+              <AddToCartButton product={product as ProductSummary} className="flex-1 sm:flex-none" />
+              <WishlistButton productId={product.id} variant="full" />
+            </div>
             {product.stock > 0 && product.stock <= 10 && (
               <p className="mt-3 text-xs text-amber-700 dark:text-amber-400">
                 Only {product.stock} left in stock — order soon.

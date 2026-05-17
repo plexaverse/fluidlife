@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Toaster } from "react-hot-toast";
 
 import { useAuthStore, isTokenValid } from "@/stores/auth-store";
+import { useWishlistStore } from "@/stores/wishlist-store";
 
 import { CartDrawer } from "./cart-drawer";
 import { GlobalLoader } from "./global-loader";
@@ -26,6 +27,7 @@ import { LoginModal } from "./login-modal";
  */
 export function StorefrontProvider({ children }: { children: React.ReactNode }) {
   const [hydrated, setHydrated] = useState(false);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
   useEffect(() => {
     setHydrated(true);
@@ -38,6 +40,16 @@ export function StorefrontProvider({ children }: { children: React.ReactNode }) 
       s.logout();
     }
   }, []);
+
+  // Hydrate the wishlist when authenticated; reset on sign-out.
+  useEffect(() => {
+    if (!hydrated) return;
+    if (isAuthenticated) {
+      useWishlistStore.getState().load();
+    } else {
+      useWishlistStore.getState().reset();
+    }
+  }, [hydrated, isAuthenticated]);
 
   return (
     <>
