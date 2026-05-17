@@ -73,7 +73,12 @@ export function AddressSelector({ selectedId, onSelect }: AddressSelectorProps) 
     return (
       <div className="rounded-xl border bg-card p-5">
         <h3 className="font-medium mb-3">Add a shipping address</h3>
-        <AddressForm onCreated={(a) => setAddresses([a]) || onSelect(a)} />
+        <AddressForm
+          onCreated={(a) => {
+            setAddresses([a]);
+            onSelect(a);
+          }}
+        />
       </div>
     );
   }

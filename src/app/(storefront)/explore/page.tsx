@@ -14,6 +14,8 @@ export const metadata: Metadata = {
   description: "Browse the full Fluidlife catalogue.",
 };
 
+export const dynamic = "force-dynamic";
+
 const PAGE_SIZE = 24;
 
 interface PageProps {
