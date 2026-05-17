@@ -7,18 +7,26 @@ the codebase; this file is forward-looking.
 
 ---
 
-## Engineering status (as of Phase 4)
+## Engineering status
 
-All planned backend phases are complete and merged to `main`.
+Backend phases 1–4 merged to `main`. Storefront port + later polish on
+`develop`, pending the next release.
 
 | Phase | Scope | Status |
 |-------|-------|--------|
-| 1 | Production backend (auth, orders, products, GST, coupons, Razorpay webhook) | ✅ Done |
-| 2 | Health endpoint, boot-time env validation, Shiprocket order creation, SMS scaffolding | ✅ Done |
-| 3 | Server-side PDF invoices, analytics hooks, distributor self-service portal | ✅ Done |
-| 4 | Admin order lifecycle (confirm payment, ship, deliver, cancel), CSV export, order-actions UI | ✅ Done |
+| Backend 1 | Production backend (auth, orders, products, GST, coupons, Razorpay webhook) | ✅ merged to `main` |
+| Backend 2 | Health endpoint, boot-time env validation, Shiprocket order creation, SMS scaffolding | ✅ merged to `main` |
+| Backend 3 | Server-side PDF invoices, analytics hooks, distributor self-service portal | ✅ merged to `main` |
+| Backend 4 | Admin order lifecycle (confirm payment, ship, deliver, cancel), CSV export, order-actions UI | ✅ merged to `main` |
+| Storefront 1 | Customer chrome (route group, navbar, footer, zustand stores, legal pages) | ✅ on `develop` |
+| Storefront 2 | Browse (home, category, product, explore) + server services layer | ✅ on `develop` |
+| Storefront 3 | OTP login, cart drawer, checkout, Razorpay client SDK, order outcome pages | ✅ on `develop` |
+| Storefront 4 | `/account` (orders, addresses, wishlist, profile) + heart buttons | ✅ on `develop` |
+| Polish | Build pipeline green, server-side Razorpay order creation | ✅ on `develop` |
 
-Test coverage: **134 tests passing** (vitest). TypeScript: clean (`tsc --noEmit` passes).
+Test coverage: **135 tests passing** across 16 suites (vitest).
+TypeScript: clean (`npm run build` exits 0).
+Next release: `develop → main` PR will bundle the storefront + polish.
 
 ---
 
@@ -42,6 +50,8 @@ These are blockers, not "nice to have." Each one is operational, not code.
         `ADMIN_USERNAME`, `ADMIN_PASSWORD`
       - Providers: `TWO_FACTOR_AUTH_KEY`, `TWO_FACTOR_BASE_URL`,
         `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`,
+        `NEXT_PUBLIC_RAZORPAY_KEY_ID` (same value as `RAZORPAY_KEY_ID`, exposed
+        to the storefront SDK — **never expose the secret**),
         `SHIPROCKET_EMAIL`, `SHIPROCKET_PASSWORD`, `SHIPROCKET_WEBHOOK_TOKEN`,
         `SHIPROCKET_PICKUP_LOCATION`
       - Rate limiting: `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`
@@ -83,7 +93,7 @@ These are blockers, not "nice to have." Each one is operational, not code.
 - [ ] **Smoke tests on staging**
       Place a real prepaid order end-to-end (storefront → Razorpay test mode
       → webhook → admin ship → Shiprocket webhook status update → delivered).
-      The 134 vitest tests cover correctness but don't exercise live integrations.
+      The 135 vitest tests cover correctness but don't exercise live integrations.
 
 ---
 
@@ -107,6 +117,10 @@ Not blockers, but you'll feel the pain quickly without them.
       Admin must set `isApproved: true` before they can place orders. Wire a
       UI or notification so pending approvals don't go unnoticed.
       Check: `GET /api/users?role=DISTRIBUTOR&isApproved=false`
+- [ ] **`npm audit` triage**
+      `npm install` reports 9 vulns (7 moderate, 2 high) post-install. Most
+      look like transitive dev-dep stuff; worth a one-shot review with
+      `npm audit fix` before launch.
 
 ---
 
@@ -132,6 +146,20 @@ Defer until traffic or product strategy demands it.
       to GA4 / Mixpanel / Segment to consume the event stream.
 - [ ] **Bulk order operations**
       Admin bulk-cancel, bulk status change across a filtered set.
+- [ ] **Cache storefront reads (`unstable_cache`)**
+      The four DB-touching storefront pages (home, explore, category, product)
+      are currently `dynamic = "force-dynamic"` so the build doesn't require a
+      DB connection. Per-request Prisma is fine for early traffic; wrapping
+      `getPublicProducts` / `getPublicCategories` / `getPublicProduct` in
+      `unstable_cache` with a 60–300s revalidate gets the ISR-equivalent perf
+      back without re-introducing the build-time DB dependency.
+- [ ] **Default-address exclusivity**
+      Setting an address as default (`PATCH /api/addresses/[id]` with
+      `isDefault: true`) doesn't auto-clear the previous default. The
+      storefront's `/account?tab=addresses` UI shows the latest "Default"
+      badge correctly, but if you need strict single-default invariant,
+      wrap the PATCH in a transaction that first clears `isDefault` on the
+      user's other addresses.
 
 ---
 
@@ -146,9 +174,9 @@ psql "$DATABASE_URL" -f prisma/cleanup_jobs.sql
 
 ### Test
 ```bash
-npm test                   # vitest run (134 tests)
+npm test                   # vitest run (135 tests)
 npm run test:watch         # interactive
-npx tsc --noEmit           # type check
+npm run build              # full Next build (compile + type check + page gen)
 ```
 
 ### Helpful endpoints (admin-only)
