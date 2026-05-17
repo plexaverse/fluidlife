@@ -12,12 +12,62 @@ import { checkoutSchema } from "@/lib/schemas";
 import { computeTaxLine, summarizeTax, isInterState, type TaxLine } from "@/lib/gst";
 import { env } from "@/lib/env";
 import { trackEvent } from "@/lib/analytics";
+import { createRazorpayOrder } from "@/lib/razorpay";
 
 const ZERO = new Prisma.Decimal(0);
 const DELIVERY_GST_RATE = new Prisma.Decimal(18);
 
 function generateOrderId(): string {
   return `ORD-${crypto.randomBytes(8).toString("hex").toUpperCase()}`;
+}
+
+/**
+ * Ensure a PREPAID order has a Razorpay-side order bound to it. This binds
+ * the amount cryptographically server-side; without it, the client SDK
+ * accepts whatever amount it's told to charge.
+ *
+ * Idempotent and replay-safe:
+ *  - No-op for non-PREPAID payment types
+ *  - No-op if the order already has a razorpayOrderId
+ *  - Skips with a warning if Razorpay credentials aren't configured
+ *    (degraded mode — useful for local dev / staging without live keys)
+ *  - Forwards `idempotencyKey` to Razorpay so retries don't create duplicates
+ *
+ * Returns the order with `razorpayOrderId` populated when successful, or
+ * throws if Razorpay rejects the order.
+ */
+async function ensureRazorpayOrder<T extends {
+  id: string;
+  orderId: string;
+  amount: Prisma.Decimal | string | number;
+  paymentType: string;
+  razorpayOrderId: string | null;
+}>(order: T, idempotencyKey: string | null | undefined): Promise<T> {
+  if (order.paymentType !== "PREPAID") return order;
+  if (order.razorpayOrderId) return order;
+  if (!env.RAZORPAY_KEY_ID || !env.RAZORPAY_KEY_SECRET) {
+    logger.warn("[checkout] Razorpay creds missing — skipping server-side order creation", {
+      orderId: order.orderId,
+    });
+    return order;
+  }
+
+  const amountPaise = Math.round(parseFloat(String(order.amount)) * 100);
+  if (amountPaise <= 0) return order;
+
+  const rzpOrder = await createRazorpayOrder({
+    amount: amountPaise,
+    receipt: order.orderId,
+    notes: { orderId: order.orderId },
+    ...(idempotencyKey && { idempotencyKey: `rzp:${idempotencyKey}` }),
+  });
+
+  // Persist the binding so subsequent retries see it via the idempotency replay path.
+  const updated = await prismadb.order.update({
+    where: { id: order.id },
+    data: { razorpayOrderId: rzpOrder.id },
+  });
+  return { ...order, ...updated };
 }
 
 export async function OPTIONS(req: Request) {
@@ -60,7 +110,17 @@ export async function POST(req: Request) {
         if (existing.userId !== session.userId) {
           return apiError("CONFLICT", "Idempotency key already used", headers);
         }
-        return NextResponse.json(existing, { headers });
+        // The prior attempt may have created the order but failed before
+        // binding to a Razorpay order — heal that here on replay.
+        try {
+          const healed = await ensureRazorpayOrder(existing, idempotencyKey);
+          return NextResponse.json(healed, { headers });
+        } catch (e) {
+          logger.error("[checkout] Razorpay order creation failed on replay", e, {
+            orderId: existing.orderId,
+          });
+          return apiError("INTERNAL", "Could not initialise payment. Please retry.", headers);
+        }
       }
     }
 
@@ -318,7 +378,23 @@ export async function POST(req: Request) {
       amount: String(result.order.amount),
       paymentType: result.order.paymentType,
     });
-    return NextResponse.json(result.order, { headers });
+
+    // Bind to a Razorpay-side order for PREPAID flows. Done *outside* the
+    // Postgres transaction because the Razorpay API call takes 200-500ms and
+    // we don't want long-lived row locks. If this throws, the local order is
+    // intact — the client can retry with the same idempotencyKey to heal it
+    // via the replay path above.
+    let order = result.order;
+    try {
+      order = await ensureRazorpayOrder(order, idempotencyKey);
+    } catch (e) {
+      logger.error("[checkout] Razorpay order creation failed", e, {
+        orderId: order.orderId,
+      });
+      return apiError("INTERNAL", "Could not initialise payment. Please retry.", headers);
+    }
+
+    return NextResponse.json(order, { headers });
   } catch (error: any) {
     if (error?.code === "P2002") {
       try {
