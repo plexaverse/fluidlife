@@ -117,6 +117,11 @@ export async function safePatch<T>(url: string, body?: unknown, config?: AxiosRe
   return res.data;
 }
 
+export async function safePut<T>(url: string, body?: unknown, config?: AxiosRequestConfig): Promise<T> {
+  const res = await api.put<T>(url, body, config);
+  return res.data;
+}
+
 export async function safeDelete<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
   const res = await api.delete<T>(url, config);
   return res.data;
