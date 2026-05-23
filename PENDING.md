@@ -9,8 +9,9 @@ the codebase; this file is forward-looking.
 
 ## Engineering status
 
-Backend phases 1–4 merged to `main`. Storefront port + later polish on
-`develop`, pending the next release.
+Backend + storefront in main. Recent sprint ported the storefront UI to match
+takekare visually 1:1 — applied directly to `main` (no PRs), staged for the
+next commit.
 
 | Phase | Scope | Status |
 |-------|-------|--------|
@@ -18,15 +19,15 @@ Backend phases 1–4 merged to `main`. Storefront port + later polish on
 | Backend 2 | Health endpoint, boot-time env validation, Shiprocket order creation, SMS scaffolding | ✅ merged to `main` |
 | Backend 3 | Server-side PDF invoices, analytics hooks, distributor self-service portal | ✅ merged to `main` |
 | Backend 4 | Admin order lifecycle (confirm payment, ship, deliver, cancel), CSV export, order-actions UI | ✅ merged to `main` |
-| Storefront 1 | Customer chrome (route group, navbar, footer, zustand stores, legal pages) | ✅ on `develop` |
-| Storefront 2 | Browse (home, category, product, explore) + server services layer | ✅ on `develop` |
-| Storefront 3 | OTP login, cart drawer, checkout, Razorpay client SDK, order outcome pages | ✅ on `develop` |
-| Storefront 4 | `/account` (orders, addresses, wishlist, profile) + heart buttons | ✅ on `develop` |
-| Polish | Build pipeline green, server-side Razorpay order creation | ✅ on `develop` |
+| Storefront 1–4 | Chrome + browse + checkout + account (zustand, OTP, Razorpay client, wishlist, addresses) | ✅ on `main` |
+| Storefront polish | Build green, server-side Razorpay order creation, light-mode forced for customer routes | ✅ on `main` |
+| Takekare visual port | About / Contact / Explore / Category / Product / Product card / Navbar — assets, Lottie, Swiper gallery, Timeline, marquee reviews, sticky bottom bar | ✅ direct edits on `main`, staged |
+| Dummy data seed | `prisma/seed.mjs` — 3 billboards, 4 categories, 6 products (3 featured), 12 images, 6 reviews; broken Unsplash IDs replaced and re-probed | ✅ on `main`, run via `npm run db:seed` |
 
 Test coverage: **135 tests passing** across 16 suites (vitest).
-TypeScript: clean (`npm run build` exits 0).
-Next release: `develop → main` PR will bundle the storefront + polish.
+TypeScript: clean (`npx tsc --noEmit` only flags a stale `.next/types/validator.ts` from an old build — wipes itself on next clean build).
+ESLint on touched files: clean. Project-wide lint shows ~5.6k pre-existing
+`any`-type errors in older code, not introduced by this work.
 
 ---
 
@@ -50,8 +51,9 @@ These are blockers, not "nice to have." Each one is operational, not code.
         `ADMIN_USERNAME`, `ADMIN_PASSWORD`
       - Providers: `TWO_FACTOR_AUTH_KEY`, `TWO_FACTOR_BASE_URL`,
         `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`,
-        `NEXT_PUBLIC_RAZORPAY_KEY_ID` (same value as `RAZORPAY_KEY_ID`, exposed
-        to the storefront SDK — **never expose the secret**),
+        `NEXT_PUBLIC_RAZORPAY_KEY_ID` ✅ now set in local `.env` (same value
+        as `RAZORPAY_KEY_ID`; **flip to live `rzp_live_…` together** when going
+        live, the secret stays server-only),
         `SHIPROCKET_EMAIL`, `SHIPROCKET_PASSWORD`, `SHIPROCKET_WEBHOOK_TOKEN`,
         `SHIPROCKET_PICKUP_LOCATION`
       - Rate limiting: `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`
@@ -59,8 +61,9 @@ These are blockers, not "nice to have." Each one is operational, not code.
       - Storage: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
       - Analytics (optional): `ANALYTICS_WEBHOOK_URL`
 - [ ] **Razorpay dashboard**
-      - Create live keys → set `RAZORPAY_KEY_ID` + `RAZORPAY_KEY_SECRET`
-        (needed by refund + reconcile endpoints; webhook only needs the secret)
+      - Create live keys → set `RAZORPAY_KEY_ID` + `RAZORPAY_KEY_SECRET` +
+        `NEXT_PUBLIC_RAZORPAY_KEY_ID` (needed by refund + reconcile endpoints;
+        webhook only needs the secret)
       - Add webhook: `https://<host>/api/razorpay/webhook` with the configured
         secret, events `payment.captured`, `payment.authorized`, `payment.failed`
 - [ ] **Shiprocket dashboard**
@@ -74,6 +77,8 @@ These are blockers, not "nice to have." Each one is operational, not code.
       - Verify the sender domain in Resend (DKIM/SPF DNS records)
       - Emails fire for: ORDER_CONFIRMED, ORDER_SHIPPED, ORDER_DELIVERED,
         ORDER_REFUNDED, ORDER_CANCELLED
+      - Currently the API logs `RESEND not configured` and no-ops — orders
+        confirm cleanly but the customer doesn't get an email.
 - [ ] **Seller info for invoices**
       Set `SELLER_NAME`, `SELLER_GSTIN`, `SELLER_PAN`, `SELLER_ADDRESS`,
       `SELLER_STATE`, `SELLER_PINCODE`, `SELLER_EMAIL`, `SELLER_PHONE`.
@@ -94,6 +99,59 @@ These are blockers, not "nice to have." Each one is operational, not code.
       Place a real prepaid order end-to-end (storefront → Razorpay test mode
       → webhook → admin ship → Shiprocket webhook status update → delivered).
       The 135 vitest tests cover correctness but don't exercise live integrations.
+
+---
+
+## Placeholder content to swap out (from the takekare visual port)
+
+Visual/copy carry-overs from `takekare-frontend` that need real Fluidlife
+content before launch. The code paths are wired — just data + assets.
+
+- [ ] **Contact page — Google Maps iframe**
+      `src/app/(storefront)/contact/page.tsx` still embeds takekare's Latur
+      pin (`TakeKare Health and Hygiene`). Replace the iframe `src=` `pb=`
+      parameter with the Fluidlife registered-office embed URL from
+      [google.com/maps](https://www.google.com/maps).
+- [ ] **Contact page — address & phone**
+      Currently shows placeholder address/phone copied from takekare's tone.
+      Update the `Visit Us.` block + `mailto:` / `tel:` links to real
+      Fluidlife details.
+- [ ] **About-us — Our Clients logos**
+      `src/app/(storefront)/about-us/page.tsx` lists 8 client logos
+      (`/img/clients/01.png` … `08.png`) labelled with takekare's clients
+      (ONGC / Baikakaji / etc.). Replace with Fluidlife's actual retail / B2B
+      partner logos and labels.
+- [ ] **About-us — `fluidlife-icon.svg`**
+      `public/img/fluidlife-icon.svg` is a copy of `takekare-icon.svg`.
+      Replace with the real Fluidlife mark.
+- [ ] **Explore — draggable product cards**
+      `src/app/(storefront)/explore/components/product-draggable-cards.tsx`
+      shows 4 takekare product webps (`/img/products/FC_5.webp`,
+      `HW_6.webp`, `IIW_5.webp`, `LD_6.webp`) with takekare's product names
+      ("Inner-wear Wash" etc.). Swap for Fluidlife product photography +
+      names once the lineup is finalised.
+- [ ] **Catalogue imagery — Unsplash placeholders**
+      `prisma/seed.mjs` populates billboards + product images from
+      `images.unsplash.com`. Replace with real product photography hosted on
+      Supabase Storage (or Cloudinary), then **remove `images.unsplash.com`
+      from `next.config.ts` `remotePatterns`**. Until then, every Unsplash
+      photo ID we use should stay alive — broken IDs already surface as
+      visible 404s in the gallery.
+- [ ] **WhatsApp number**
+      `NEXT_PUBLIC_WHATSAPP_NUMBER` env var drives the floating WhatsApp
+      button in the bottom-left of every storefront page. Already set per
+      your earlier note — verify the live value is the support number
+      before launch.
+- [ ] **Social links**
+      `src/components/storefront/social-icons.tsx` still points at generic
+      `amazon.in` / `instagram.com` URLs. Update with the real Fluidlife
+      profile URLs when they exist.
+- [ ] **Hero illustration — `landing-picture-transparent.webp`**
+      The home page hero still uses this file (the only one not from
+      takekare). Verify it represents the Fluidlife brand correctly.
+- [ ] **Default seller info for invoices**
+      See the seller-env section above — until set, invoice PDFs show blank
+      header blocks.
 
 ---
 
@@ -118,9 +176,10 @@ Not blockers, but you'll feel the pain quickly without them.
       UI or notification so pending approvals don't go unnoticed.
       Check: `GET /api/users?role=DISTRIBUTOR&isApproved=false`
 - [ ] **`npm audit` triage**
-      `npm install` reports 9 vulns (7 moderate, 2 high) post-install. Most
-      look like transitive dev-dep stuff; worth a one-shot review with
-      `npm audit fix` before launch.
+      `npm install` reports 12 vulns (10 moderate, 2 high) post the recent
+      `swiper` + `lottie-react` + `@tabler/icons-react` adds. Most look like
+      transitive dev-dep stuff; worth a one-shot review with `npm audit fix`
+      before launch.
 
 ---
 
