@@ -1,51 +1,68 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 
-import { Button } from "@/components/ui/button";
+import { AboutNextProject } from "@/components/storefront/about-next-project";
+
+import { AboutHero } from "./components/about-hero";
 
 export const metadata: Metadata = {
-  title: "About Fluidlife",
-  description: "The story behind Fluidlife and why we build what we build.",
+  title: "About Us",
+  description: "Learn more about Fluidlife, our mission, vision, and values.",
 };
 
 export default function AboutPage() {
   return (
-    <div className="mx-auto max-w-3xl px-4 md:px-6 py-16 space-y-8">
-      <header className="space-y-3">
-        <h1 className="text-3xl md:text-5xl font-semibold">
-          We make everyday care <span className="gradient-text-bold">better</span>.
-        </h1>
-        <p className="text-lg text-muted-foreground">
-          Healthier for you. Safer for your family. Lighter on the planet.
-        </p>
-      </header>
+    <main className="min-h-screen">
+      {/* Hero with logo + "We Are INNOVATORS / FORMULATORS / MANUFACTURERS" stagger */}
+      <AboutHero />
 
-      <div className="prose prose-neutral dark:prose-invert max-w-none">
-        <p>
-          Fluidlife was built around a simple frustration — the things we use every day
-          shouldn&apos;t force a trade-off between what works for us and what works for the
-          environment. So we set out to make better-everyday-care a quiet, easy default.
-        </p>
-        <p>
-          Every product on this catalogue is chosen with three filters: it has to{" "}
-          <strong>actually work</strong>, it has to be <strong>safe</strong> to use, and it
-          has to make a <strong>genuine environmental contribution</strong> — through
-          recyclable packaging, lower-impact ingredients, or longer-lived design.
-        </p>
-        <p>
-          We&apos;re a small team based in India, building this slowly and thoughtfully.
-          Thanks for being here.
-        </p>
-      </div>
+      {/* Vision & Mission */}
+      <section className="py-12">
+        <div className="bg-muted/40 grid md:grid-cols-2">
+          {/* Brand-gradient placeholder block. Replace with /img/about_section.webp
+              when you have the asset. */}
+          <div className="flex items-center justify-center md:justify-end md:pr-12 p-8 md:p-12">
+            <div className="relative h-72 w-72 md:h-96 md:w-96 rounded-3xl overflow-hidden brand-gradient">
+              <div className="absolute inset-4 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                <span className="text-white text-7xl md:text-8xl font-extrabold drop-shadow-md">F</span>
+              </div>
+            </div>
+          </div>
 
-      <div className="flex flex-wrap gap-3 pt-4">
-        <Button asChild>
-          <Link href="/explore">Browse the catalogue</Link>
-        </Button>
-        <Button variant="outline" asChild>
-          <Link href="/contact">Get in touch</Link>
-        </Button>
-      </div>
-    </div>
+          <div className="px-4 md:pr-12 flex flex-col items-start justify-center md:mr-12 md:my-10 py-10 md:py-0">
+            <h3 className="gradient-text-semibold text-xl md:text-2xl mb-2">Our Vision</h3>
+            <p className="text-base leading-relaxed text-muted-foreground">
+              To be a sizeable brand that is omnipresent in retail as well as digital
+              space with high brand recall for problem-solving health and hygiene
+              products.
+            </p>
+            <p className="text-base leading-relaxed text-muted-foreground mt-3">
+              To build assets and capabilities to serve larger audiences across the
+              globe.
+            </p>
+            <p className="text-base leading-relaxed text-muted-foreground mt-3">
+              To create wealth for all stakeholders involved — shareholders, investors,
+              partners, and team members.
+            </p>
+            <p className="text-base leading-relaxed text-muted-foreground mt-3">
+              To have a significant and notable contribution back to society,
+              particularly for environment and welfare causes.
+            </p>
+
+            <h3 className="gradient-text-semibold text-xl md:text-2xl mb-2 mt-12">Our Mission</h3>
+            <p className="text-base leading-relaxed text-muted-foreground">
+              To make top-notch care and well-being products that customers trust and
+              have seen effective results with.
+            </p>
+            <p className="text-base leading-relaxed text-muted-foreground mt-3">
+              To stand out as a brand that makes conscious, problem-solving, innovative,
+              environment-friendly, and value products in the health and hygiene space.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Pre-footer CTA */}
+      <AboutNextProject />
+    </main>
   );
 }
