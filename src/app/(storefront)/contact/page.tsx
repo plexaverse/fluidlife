@@ -1,84 +1,120 @@
 import type { Metadata } from "next";
-import { Mail, MapPin, MessageSquare, Phone } from "lucide-react";
+
+import { SocialIcons } from "@/components/storefront/social-icons";
+import { TextGenerateEffect } from "@/components/ui/text-generate-effect";
+
+import { ContactForm } from "./components/contact-form";
 
 export const metadata: Metadata = {
   title: "Contact us",
-  description: "Get in touch with Fluidlife — email, phone, WhatsApp.",
+  description:
+    "Get in touch with Fluidlife — email, phone, or send us a message. We listen to our consumers.",
 };
-
-const CONTACT_CHANNELS = [
-  {
-    Icon: Mail,
-    label: "Email",
-    value: "hello@fluidlife.example",
-    href: "mailto:hello@fluidlife.example",
-  },
-  {
-    Icon: Phone,
-    label: "Phone",
-    value: "+91 000 000 0000",
-    href: "tel:+910000000000",
-  },
-  {
-    Icon: MessageSquare,
-    label: "WhatsApp",
-    value: "+91 000 000 0000",
-    href: "https://wa.me/910000000000",
-  },
-] as const;
 
 export default function ContactPage() {
   return (
-    <div className="mx-auto max-w-3xl px-4 md:px-6 py-16 space-y-8">
-      <header>
-        <h1 className="text-3xl md:text-5xl font-semibold mb-3">Get in touch</h1>
-        <p className="text-lg text-muted-foreground">
-          For orders, returns, or anything in between — we&apos;re a quick message away.
-        </p>
-      </header>
+    <main className="min-h-screen">
+      {/* Hero */}
+      <section className="relative pt-20 bg-white text-black">
+        <div className="container mx-auto px-4 pt-20">
+          <div className="max-w-3xl mx-auto">
+            <h1 className="text-4xl md:text-5xl mb-2">Let&apos;s talk</h1>
+            <h2 className="text-3xl md:text-4xl mb-6">about you.</h2>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {CONTACT_CHANNELS.map((ch) => (
-          <a
-            key={ch.label}
-            href={ch.href}
-            target={ch.href.startsWith("http") ? "_blank" : undefined}
-            rel={ch.href.startsWith("http") ? "noopener noreferrer" : undefined}
-            className="group rounded-2xl border bg-card p-6 hover:bg-muted/30 transition-colors"
-          >
-            <ch.Icon className="h-5 w-5 text-muted-foreground mb-3 group-hover:text-foreground transition-colors" />
-            <p className="text-xs uppercase tracking-widest text-muted-foreground mb-1">
-              {ch.label}
-            </p>
-            <p className="font-medium">{ch.value}</p>
-          </a>
-        ))}
-      </div>
+            <p className="text-lg mb-4">We listen to our consumers!</p>
+            <TextGenerateEffect
+              className="text-sm md:text-lg mb-4"
+              words="If you have any feedback or a story to share with us, we are here! Also, if you have any issues that you face in your everyday hygiene and want a solution, write to us, we will customise a solution just for YOU!"
+            />
 
-      <section className="rounded-2xl border bg-card p-6 flex gap-4">
-        <MapPin className="h-5 w-5 text-muted-foreground mt-0.5 shrink-0" />
-        <div>
-          <p className="text-xs uppercase tracking-widest text-muted-foreground mb-1">
-            Registered office
-          </p>
-          <p>Fluidlife, India</p>
-          <p className="text-sm text-muted-foreground mt-1">
-            Placeholder address — replace with your registered office before launch.
-          </p>
+            <div
+              className="opacity-0 animate-fade-up"
+              style={{ animationDelay: "7.5s" }}
+            >
+              <p className="gradient-text-semibold text-3xl md:text-4xl pt-4">
+                Stay Fluid!
+              </p>
+            </div>
+          </div>
         </div>
       </section>
 
-      <p className="text-sm text-muted-foreground">
-        For privacy-related concerns, see our{" "}
-        <a className="underline" href="/privacy-policy">
-          privacy policy
-        </a>
-        . For returns or shipping queries, see our{" "}
-        <a className="underline" href="/return-policy">
-          shipping &amp; returns
-        </a>{" "}
-        policy.
-      </p>
-    </div>
+      {/* Form + info */}
+      <section className="pt-12 pb-16">
+        <div className="container mx-auto px-4">
+          <div className="grid md:grid-cols-2 gap-12">
+            <ContactForm />
+
+            <div className="p-2">
+              <h4 className="gradient-text-semibold text-2xl md:text-3xl mb-8">
+                Contact Info.
+              </h4>
+
+              <h3 className="text-2xl mb-6">Let&apos;s Talk.</h3>
+              <div className="mb-8">
+                <p className="mb-2">
+                  <a
+                    href="mailto:hello@fluidlife.example"
+                    className="text-gray-700 hover:text-purple-600"
+                  >
+                    hello@fluidlife.example
+                  </a>
+                </p>
+                <p>
+                  <a
+                    href="tel:+910000000000"
+                    className="text-gray-700 hover:text-purple-600"
+                  >
+                    +91 00000 00000
+                  </a>
+                </p>
+              </div>
+
+              <h3 className="text-2xl mb-6">Visit Us.</h3>
+              <div>
+                <p className="text-gray-700">
+                  Fluidlife Health and Hygiene, opposite Nandai Girls Hostel,
+                  <br />
+                  Sitaram Nagar, Latur - 413512,
+                  <br />
+                  Maharashtra, India.
+                </p>
+              </div>
+
+              <SocialIcons iconColor="black" />
+
+              <p className="mt-8 text-sm text-muted-foreground">
+                For privacy-related concerns, see our{" "}
+                <a className="underline" href="/privacy-policy">
+                  privacy policy
+                </a>
+                . For returns or shipping queries, see our{" "}
+                <a className="underline" href="/return-policy">
+                  shipping &amp; returns
+                </a>{" "}
+                policy.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Google Maps. Iframe + business pin ported from takekare; swap the
+          `pb` parameter for your registered office before launch. */}
+      <section className="py-8">
+        <div className="container mx-auto px-4">
+          <div className="w-full h-[400px] relative">
+            <iframe
+              title="Fluidlife on Google Maps"
+              src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3786.0162252593645!2d76.56398861086711!3d18.392112682604537!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3bcf83fcfe145637%3A0x123f2d20030091c6!2sTakeKare%20Health%20and%20Hygiene!5e0!3m2!1sen!2sin!4v1696963808939!5m2!1sen!2sin"
+              className="absolute inset-0 w-full h-full border-0"
+              allowFullScreen
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
+            />
+          </div>
+        </div>
+      </section>
+    </main>
   );
 }

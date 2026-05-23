@@ -83,8 +83,10 @@ export function Navbar({ categories }: NavbarProps) {
       )}
     >
       <div className="mx-auto w-full max-w-7xl flex flex-col px-4 md:px-6">
-        {/* Top row: logo + actions */}
-        <div className="flex h-16 items-center justify-between gap-4">
+        {/* Top row: logo (left) + actions (right). Categories slot in via
+            translate below — same pattern as takekare's Navbar. */}
+        <div className="relative flex h-16 items-center justify-between gap-4">
+          {/* Left: logo */}
           <Link
             href="/"
             className="flex items-center gap-2 font-semibold text-lg tracking-tight ml-2 md:ml-5"
@@ -93,6 +95,7 @@ export function Navbar({ categories }: NavbarProps) {
             <span>Fluidlife</span>
           </Link>
 
+          {/* Right: actions */}
           <div className="flex items-center gap-2 mr-2">
             {isAuthenticated ? (
               <DropdownMenu>
@@ -144,15 +147,18 @@ export function Navbar({ categories }: NavbarProps) {
               <span className="tabular-nums">{totalItems}</span>
             </motion.button>
           </div>
-        </div>
 
-        {/* Bottom row: category hover menu */}
-        {categories.length > 0 && (
-          <NavCategoriesMenu
-            categories={categories}
-            className="hidden md:flex md:-translate-y-1"
-          />
-        )}
+          {/* Centre: category hover menu — absolutely positioned so it
+              stays mathematically centred regardless of how wide the
+              logo or the actions group grow. Hidden on mobile. */}
+          {categories.length > 0 && (
+            <div className="hidden md:flex absolute left-1/2 -translate-x-1/2 inset-y-0 items-center pointer-events-none">
+              <div className="pointer-events-auto">
+                <NavCategoriesMenu categories={categories} />
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   );

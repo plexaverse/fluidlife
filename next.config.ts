@@ -15,6 +15,14 @@ const nextConfig: NextConfig = {
         hostname: "res.cloudinary.com",
         pathname: "/**",
       },
+      // Used for seeded placeholder catalog imagery during pre-launch. Swap
+      // out for real product photography (and remove this entry) before
+      // going live.
+      {
+        protocol: "https",
+        hostname: "images.unsplash.com",
+        pathname: "/**",
+      },
     ],
   },
 };

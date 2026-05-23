@@ -47,7 +47,7 @@ function NavInner({ categories, className }: NavCategoriesMenuProps) {
   const surface = categories.filter((c) => !/personal/i.test(c.name));
 
   return (
-    <div className={cn("w-full flex justify-center", className)}>
+    <div className={cn("flex justify-center", className)}>
       <Menu setActive={setActive}>
         {personal.length > 0 && (
           <MenuItem setActive={setActive} active={active} item="Personal Kare">

@@ -1,5 +1,4 @@
 import { notFound } from "next/navigation";
-import Link from "next/link";
 import Image from "next/image";
 import type { Metadata } from "next";
 
@@ -46,52 +45,70 @@ export default async function CategoryPage({ params, searchParams }: PageProps) 
   const bannerImage = category.billboard?.imageUrl;
 
   return (
-    <>
-      {/* Category banner */}
-      <section className="relative h-48 md:h-64 overflow-hidden bg-muted">
-        {bannerImage && (
+    <main className="min-h-screen">
+      {/* Billboard hero — ported 1:1 from takekare's category page: full
+          80vh, dark overlay, uppercase gradient title pinned to the bottom,
+          double-chevron scroll cue that bounces. */}
+      {bannerImage && (
+        <div className="relative w-full h-[80vh]">
           <Image
             src={bannerImage}
-            alt={category.name}
+            alt={category.billboard?.label ?? category.name}
             fill
             priority
             sizes="100vw"
-            className="object-cover"
+            className="object-cover pt-30 md:pt-24"
           />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
-        <div className="absolute inset-0 flex items-center justify-center text-center px-4">
-          <div className="text-white">
-            <p className="text-xs uppercase tracking-widest text-white/80 mb-2">Category</p>
-            <h1 className="text-3xl md:text-5xl font-semibold">{category.name}</h1>
+          <div className="absolute inset-0 flex items-end justify-center px-4 bg-black/60 mt-30 md:mt-24">
+            <div className="flex flex-col items-center">
+              <h1 className="gradient-text-bold text-white text-3xl sm:text-4xl md:text-6xl text-center mb-10 md:mb-20 drop-shadow-lg uppercase">
+                {category.name.toUpperCase()}
+              </h1>
+
+              <div className="text-center mt-5 animate-bounce">
+                <svg
+                  width="40"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#fff"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <polyline points="19 12 12 19 5 12" />
+                </svg>
+                <svg
+                  width="40"
+                  height="30"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#fff"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  style={{ transform: "translateY(-10px)" }}
+                >
+                  <polyline points="19 12 12 19 5 12" />
+                </svg>
+              </div>
+            </div>
           </div>
         </div>
-      </section>
+      )}
 
-      {/* Breadcrumb */}
-      <nav className="mx-auto max-w-7xl px-4 md:px-6 pt-6 text-sm text-muted-foreground">
-        <Link href="/" className="hover:text-foreground">Home</Link>
-        <span className="mx-2">/</span>
-        <Link href="/explore" className="hover:text-foreground">Categories</Link>
-        <span className="mx-2">/</span>
-        <span className="text-foreground">{category.name}</span>
-      </nav>
-
-      {/* Products */}
-      <section className="mx-auto max-w-7xl px-4 md:px-6 py-8">
+      {/* Products grid */}
+      <div className="container mx-auto px-4 py-6 sm:py-8 md:py-12">
         {products.length === 0 ? (
-          <div className="rounded-2xl border bg-card p-12 text-center">
-            <p className="text-muted-foreground">No products in this category yet.</p>
-            <Link href="/explore" className="text-sm underline mt-4 inline-block">
-              Browse all products
-            </Link>
+          <div className="text-center py-8 sm:py-12">
+            <p className="text-gray-500">No products found in this category.</p>
           </div>
         ) : (
           <>
             <p className="text-sm text-muted-foreground mb-6">
               {total} {total === 1 ? "product" : "products"}
             </p>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
               {products.map((p) => (
                 <ProductCard key={p.id} product={p as ProductSummary} />
               ))}
@@ -99,7 +116,7 @@ export default async function CategoryPage({ params, searchParams }: PageProps) 
             <Pagination total={total} page={page} pageSize={PAGE_SIZE} />
           </>
         )}
-      </section>
-    </>
+      </div>
+    </main>
   );
 }
